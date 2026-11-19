@@ -67,44 +67,6 @@ x-wonton:
     memory: 2G
 ```
 
-### 编排器类插件
-
-编排器自己也是一个 Bot，同时提供 `agent_acp` 给别的前端使用，并通过同一能力把任务交给其他 Agent。下面的清单与核心契约测试里的示例一致：
-
-```yaml
-name: orchestrator
-services:
-  orchestrator:
-    image: ghcr.io/example/orchestrator:1
-    environment:
-      WONTON_AGENT_ACP_URL: ${WONTON_AGENT_ACP_URL}
-      WONTON_MCP_URL: ${WONTON_MCP_URL}
-      WONTON_MATRIX_HOMESERVER: ${WONTON_MATRIX_HOMESERVER}
-      WONTON_MATRIX_USER_ID: ${WONTON_MATRIX_USER_ID}
-      WONTON_MATRIX_ACCESS_TOKEN: ${WONTON_MATRIX_ACCESS_TOKEN}
-      WONTON_MATRIX_ALLOWED_USERS: ${WONTON_MATRIX_ALLOWED_USERS}
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/healthz"]
-
-x-wonton:
-  spec: "0.15"
-  id: app.example.orchestrator
-  version: 1.0.0
-  kind: agent
-  title: { zh: 任务编排, en: Task orchestrator }
-  description: { zh: 把复杂任务交给多个 Agent 协作完成, en: Coordinate multiple Agents to complete complex tasks }
-  agent:
-    protocol: matrix
-  bot:
-    display_name: { zh: 编排器, en: Orchestrator }
-  provides:
-    agent_acp:
-      service: orchestrator
-      port: 8080
-  requires: [agent_acp]
-  permissions: [matrix.bot, tools]
-```
-
 ## 字段
 
 | 字段 | 必填 | 说明 |
@@ -129,7 +91,7 @@ x-wonton:
 | `bots` | 否 | 一个插件多个 Bot：`services` 列出每个 Bot 一份的服务（见“一个插件多个 Bot”）。 |
 | `agent` | `kind=agent` 时必填 | `protocol`：`matrix`（Agent 自己登录 Matrix，须声明 `matrix.bot`）或 `acp`（经 ACP 桥接入）。可选 `login`，见“Agent 插件”。 |
 | `agent.skills.mount` | 否 | 仅 `kind: agent` 允许。容器内的绝对路径，不能是 `/`，不能含 `..` 路径段，不能是 `/proc`、`/sys`、`/dev` 或它们的子路径。填写 Agent 原生会读取、但自己不会往里写的技能目录。 |
-| `provides` | 否 | 向其他插件提供的能力：`models`（见“模型网关”，只能 `kind: system` 的插件声明）、`egress_proxy`（见“网络”的“代理插件”），`agent_acp`（见“Agent 插件”）以及其他能力，键是能力名，见“能力依赖”。托管能力（`static_web`、`web_storage`）还要写 `mount`，见“提供方”。 |
+| `provides` | 否 | 向其他插件提供的能力：`models`（见“模型网关”）、`egress_proxy`（见“网络”的“代理插件”）以及其他能力，键是能力名，见“能力依赖”。托管能力（`static_web`、`web_storage`）还要写 `mount`，见“提供方”。 |
 | `requires`、`wants` | 否 | 依赖的能力名列表：`requires` 的能力没有提供方装不上，`wants` 有提供方就用、没有照装。提供方可以声明自己提供的同一能力；核心选提供方时排除自身。见“能力依赖”。 |
 | `gpu` | 否 | 拿到显卡的服务（`services`），以及按显卡厂商换的镜像（`images`）。要和 `devices.gpu` 权限一起声明，见“显卡”。 |
 | `devices` | 否 | 按类声明要交给哪些服务，具体设备由用户在安装时选：`serial`（每项 `service`、`target`、可选 `optional`）、`usb`、`disk`（各 `service`），见“设备”。 |
@@ -374,7 +336,6 @@ services:
 
 **0.15**
 
-- `provides.agent_acp`、`requires`/`wants: [agent_acp]` 和注入变量 `WONTON_AGENT_ACP_URL`（见“能力依赖”和“Agent 插件”）。
 - `x-wonton.remote_mcp`：`runtime: remote_mcp` 的远端服务器地址、鉴权方式和工具范围（见“远端 MCP”）。
 - `webui.service` 指向的长期运行服务可以省略 `healthcheck`：没有容器健康检查时，核心按 `webui.port` 和 `webui.path` 代做 HTTP 探测，2xx–4xx 算存活（见“健康检查”）。显式 `webui.health` 仍可指定独立的健康路径。
 - 安装时注入的变量：`WONTON_BOT_AI_LEVEL`，`matrix.bot` 或 `bots.services` 里的服务按 Bot 各拿一份，单 Bot 的插件在插件级变量里（见“安装时注入的变量”）。
@@ -1513,7 +1474,6 @@ x-wonton:
 | `WONTON_MODEL_API_KEY` | `wants: [models]` | 只属于本插件（多 Bot 时只属于这个 Bot）的网关凭据。没接上网关时是空字符串。 |
 | `WONTON_MODEL_DEFAULT` | `wants: [models]` | 默认模型名，由网关决定（magpie 是路由组 `group/wonton-default`）。没接上网关时是空字符串。 |
 | `WONTON_<能力名大写>_URL` | `requires` 或 `wants` 了通用能力（不含 `models`、`egress_proxy`） | 使用方访问提供方的地址：核心在插件网络里的别名 `<能力名>.wonton.internal`。名字转大写、非字母数字换成 `_`，如 `WONTON_TORRENT_CLIENT_URL`。见“能力依赖”。 |
-| `WONTON_AGENT_ACP_URL` | `requires` 或 `wants` 了 `agent_acp` | ACP 提供方地址，如 `http://agent_acp.wonton.internal`；使用方只通过 WebSocket 的 `/acp` 连接，核心负责选择提供方和注入身份、链、上限。 |
 | `WONTON_<能力名大写>_KEY` | 同上，且提供方声明了 `credentials` | 只属于本插件的凭据。`models` 使用上面的专用变量，不注入 `WONTON_MODELS_URL`、`WONTON_MODELS_KEY`。见“能力依赖”。 |
 | `WONTON_MCP_URL` | `tools` | MCP 总线的地址（Streamable HTTP）：核心在插件网络里的别名，路径里带着这个 Bot 的总线令牌，如 `http://mcp.wonton.internal:8080/mcp/<令牌>`；没有 Bot 的插件不带令牌段，如 `http://mcp.wonton.internal:8080/mcp`。 |
 | `WONTON_NOTIFY_URL` | `notify` | 发通知的地址：核心在插件网络里的别名，如 `http://notify.wonton.internal:8080/notices`，见“通知”。 |
@@ -1608,7 +1568,6 @@ x-wonton:
   | `static_web` | 托管：HTTP 静态文件（RFC 9110 的 `GET`/`HEAD`、条件请求、`Range`），站点根是挂载点下的 `<X-Wonton-Plugin>/`。`runtime: static_web` 的插件隐含 `requires` 它，不用再写 | 不用 | 否 |
   | `web_storage` | 托管：WebDAV（RFC 4918）整文件读写的子集，见“静态网页的数据” | 不用 | 否 |
   | `personal_data` | 位置和健康数据的存取：`POST /location`、`POST /health`、`GET /query`、`DELETE /data`、`GET /export`、`POST /cleanup`；每个请求带 `X-Wonton-User`（数据属于谁），类型名和 JSON 形状见 wontonapp/wonton 的 `wonton-protocol` 库里 `personal_data` 的文档和常量 | 要，在 `provides.personal_data.credentials` 里 | 否 |
-  | `agent_acp` | ACP over WebSocket（`/acp`）。核心注入 `X-Wonton-Plugin`、`X-Wonton-User`、`X-Wonton-Bot`、`X-Wonton-Chain` 和 `X-Wonton-Max-Depth`、`X-Wonton-Max-Rounds`、`X-Wonton-Max-Tokens`；错误按 `permission_denied`、`busy`、`limit_reached`（`depth`、`rounds`、`cost`）、`stopped`、`invalid_input`（`self_call`、`loop`）或上游错误分类 | 不用 | 是 |
   | `remote_mcp` | 托管：MCP Streamable HTTP（2025-11-25），核心把发往远端服务器的请求交给提供方，见“远端 MCP”和“连接器要实现的接口”。`runtime: remote_mcp` 的插件隐含 `requires` 它，不用再写 | 不用 | 否 |
 
   接口有不兼容的变化时换一个新名字（如 `search2`），能力名不带版本号。高权限能力见下面的“高权限能力”。
@@ -1743,11 +1702,11 @@ x-wonton:
 ## 预装插件
 
 核心镜像里带着两类插件包，核心启动后在后台装上，授予清单声明的全部权限：装核心就是用户对它们的确认。目录里
-每个子目录一个插件包，一个装完再装下一个；先装系统插件，再装默认插件（默认 Agent 要用模型网关）。
+每个子目录一个插件包，一个装完再装下一个；先装系统插件，再装默认插件。
 
 | | 目录 | 什么时候装 | 用户卸掉以后 |
 | --- | --- | --- | --- |
-| 系统插件（`kind: system`，如模型网关） | `WONTON_SYSTEM_PLUGINS` | 每次启动，没装就装 | 下次启动装回来 |
+| 系统插件（`kind: system`） | `WONTON_SYSTEM_PLUGINS` | 每次启动，没装就装 | 下次启动装回来 |
 | 默认插件（如默认 Agent） | `WONTON_DEFAULT_PLUGINS` | 只装一次 | 不再自动装 |
 
 - 系统插件只能这样装，API 装不了。默认插件是普通插件（不能是 `kind: system`），用户可以照常卸载、重装。
@@ -1768,7 +1727,7 @@ x-wonton:
 
 ## 模型网关
 
-模型网关让插件共用模型服务商设置。网关是声明了 `provides.models` 的系统插件（见“预装插件”）；核心按能力连接记录
+模型网关让插件共用模型服务商设置。网关是声明了 `provides.models` 的普通插件（如 magpie），核心不预装，用户从商店装；核心按能力连接记录
 把使用方接到它选用的提供方，给每个插件单独的凭据。`provides.models` 的接口路径、默认模型、凭据和服务商命令保留专用字段。
 
 ### 使用方
@@ -1806,8 +1765,8 @@ x-wonton:
 - 网关之后就绪（装上、起来、恢复）时，核心给没接上的使用方签发凭据并重建它们的容器，插件的启动选路在下一次
   启动时生效；网关卸掉或坏了，使用方不动，提示变回“没接上”。核心持久保存凭据和最近一次成功注入的变量；
   网关不可用时重建仍用记下的值，恢复后按同一值对账。凭据和变量都没变时不重建容器。
-- 安装预览只请求 `/models`，不发送可能计费的对话请求。`kind: agent` 即使没有声明 `wants: [models]` 也给出默认路由提示，
-  但不影响安装和状态：使用订阅账号的 ACP Agent 可能不经过模型网关。
+- 安装预览只请求 `/models`，不发送可能计费的对话请求。没声明 `wants: [models]` 的插件，Agent 也一样，不给模型提示：
+  它的模型由它自己接（见“Agent 插件”）。
 - 接上网关之后，核心按默认路由的探测结果给详情页的轻提示（不是错误，状态照常，见“凭据的签发与吊销”的记法）：
   约 30 秒一次的巡检只读 `GET <apis.openai>/models`，所有运行中的使用方共用一次结果；默认模型不在 `data` 里
   就给 `models_no_default_model`。模型已列出时，核心在核心启动首轮、使用方刚安装、刚启动时各发一次最小对话
@@ -1823,7 +1782,7 @@ x-wonton:
 
 ```yaml
 x-wonton:
-  kind: system
+  kind: model
   provides:
     models:
       service: magpie
@@ -1858,7 +1817,7 @@ x-wonton:
 命令都在 `credentials.service`（默认 `service`）的容器里执行，以容器默认用户运行。核心不经 shell 拼接或解释 argv。
 
 同一能力可以同时装几个提供 `models` 的插件，用户在设置里选全局默认的，使用方可以在自己的详情页里单独指定
-（见“能力依赖”）。提供方看得到全部模型请求和 provider 的 key，所以只有 `kind: system` 的官方插件可以声明。
+（见“能力依赖”）。提供方看得到使用方的全部模型请求和服务商的 key，装它就是把这些交给它。
 
 `/models` 和 `providers.list.configured` 只说明模型能力和已配置服务商，不证明 key 仍有效。最小补全会计费，
 不能每轮巡检发送（30 秒一次约每天 2880 次）。仅在核心启动后首轮、使用方刚安装或刚启动时各检查一次；
@@ -2570,7 +2529,7 @@ Agent 自带的工具（shell、文件这类不经 MCP 总线的）要动手之�
 
 ## Agent 插件
 
-`kind: agent` 的插件是一个 Bot 的驱动：Agent 用自己的 Matrix 客户端，以核心发的 Bot 身份收发消息（`protocol: matrix`）。编排器也是一个 Bot：它可以同时 `provides.agent_acp`，并在 `requires` 或 `wants` 里声明 `agent_acp`，把任务交给其他 Agent。核心选择提供方时排除编排器自己；只有自己提供时，`requires` 装不上，`wants` 则不建立自连。
+`kind: agent` 的插件是一个 Bot 的驱动：Agent 用自己的 Matrix 客户端，以核心发的 Bot 身份收发消息（`protocol: matrix`）。
 
 Wonton 自带的 Agent 是 Hermes。别的 Agent 由作者按这一节自己做成插件。
 
@@ -2765,19 +2724,6 @@ App 看最新的编辑。
 **频率和跳数。** Bot 经 `WONTON_MATRIX_HOMESERVER` 发消息，核心按 Bot 和房间限频：每分钟 20 条，最多连发 10 条，编辑也算。
 超了回 429 `M_LIMIT_EXCEEDED`，按 `retry_after_ms` 等。人没插话时几个 Bot 在一个房间里来回说到 20 跳，换一个 Bot 说话会被拒：
 403，`errcode` 是 `APP.WONTON.HOP_LIMIT`，不要重试，主人在 App 里点继续后清零。同一个 Bot 接着说不算一跳。
-
-### ACP 运行时和编排器
-
-声明 `agent_acp` 的提供方必须在自己的服务上提供 ACP WebSocket `/acp`。使用方连接注入的 `WONTON_AGENT_ACP_URL`，把路径加成 `/acp`；不能绕过核心直接访问提供方。核心只把带提供方令牌的连接转给它，并覆盖使用方自带的同名请求头：
-
-- `X-Wonton-Plugin`：使用方插件 ID；
-- `X-Wonton-User`：链代表的人；
-- `X-Wonton-Bot`：目标 Bot，格式为 `<插件 ID>#<Bot 名>`；
-- `X-Wonton-Chain`：调用链 ID；
-- `X-Wonton-Max-Depth`、`X-Wonton-Max-Rounds`、`X-Wonton-Max-Tokens`：这条链的层数、轮数和 token 上限；
-- `Authorization: Bearer <提供方令牌>`：只有提供方网关服务能使用，不能写进清单或交给 Agent。
-
-提供方和使用方都不能自行改变这些值。连接或请求被核心拒绝时，使用方按类别处理：`permission_denied`（身份、Bot 或归属人不允许）、`busy`（使用方连接数已满）、`limit_reached`（`depth`、`rounds` 或 `cost`）、`stopped`（链已停）、`invalid_input`（自调或绕圈）和上游错误。`limit_reached`、`stopped` 和 `invalid_input` 不要自动重试或换一条链继续原任务。
 
 ## 插件设置（`settings`）
 

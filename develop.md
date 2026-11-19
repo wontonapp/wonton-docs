@@ -105,7 +105,7 @@ scripts/dev.sh reinstall
 | `scripts/dev.sh reset` | 清理当前实例的插件容器和网络，保留核心和数据，不动其他实例 |
 | `scripts/dev.sh purge [--yes]` | 先删本实例插件和测试客户端，再拆核心栈、网络和卷；有残留就列出、非零退出并保留设置和数据。非交互必须带 `--yes` |
 
-开发环境和正式安装使用同一份 Compose：核心、身份提供方 Ory Hydra、Matrix 服务器 Tuwunel；开发时换用独立的项目名、核心容器名和实例名。核心启动后同样预装模型网关 magpie（`ai.usemagpie.magpie`）。第一次 `up` 的设置保存到 `.wonton/.env`。
+开发环境和正式安装使用同一份 Compose：核心、身份提供方 Ory Hydra、Matrix 服务器 Tuwunel；开发时换用独立的项目名、核心容器名和实例名。第一次 `up` 的设置保存到 `.wonton/.env`。
 
 `up` 保留 `.env` 已有的键、注释和额外行，只补缺项并更新解析得到的 `WONTON_CORE_IMAGE`。可手改 `WONTON_PUID`、
 `WONTON_PGID`、`WONTON_LAN_ADDRESSES`、出口代理、`TZ`、`RUST_LOG` 等，完整清单见文件头；实例名、基础域名和身份不要改。
@@ -129,7 +129,7 @@ MCP 两条路径都复用 Hermes 官方镜像内的 [Python MCP SDK（MIT）](ht
 - 只用上述脚本起停和清理自己的实例。不要运行 `docker system prune`、`docker volume prune`，也不要操作其他实例的容器、网络或卷。
 - `purge` 只匹配精确实例标签、`wonton-<实例>--` 名字前缀和完整 Compose 项目名。按实例建立的出口容器与网络一起清理；
   不带实例名的共享 `wonton-egress` 不自动删，无其他网络端点时只提示手动命令，执行前仍要确认没有实例在使用。
-- 每套环境至少使用 3 个 Docker 网络：核心、magpie、开发的插件各一个。共用主机出现 “all predefined address pools have been fully subnetted” 时，由主机维护者调整 Docker `daemon.json` 的 `default-address-pools`，例如使用更细的 `/24` 子网；不要清理其他人的网络来腾空间。
+- 每套环境至少使用 2 个 Docker 网络：核心、开发的插件各一个，每多装一个插件（如模型网关）再加一个。共用主机出现 “all predefined address pools have been fully subnetted” 时，由主机维护者调整 Docker `daemon.json` 的 `default-address-pools`，例如使用更细的 `/24` 子网；不要清理其他人的网络来腾空间。
 
 ### 选择核心镜像
 

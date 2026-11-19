@@ -2113,8 +2113,7 @@ x-wonton:
 
 旁聊是和 Bot 的私聊里的一个 Matrix 话题：用户想在不打断主对话的情况下另开一段，就开一个旁聊。Bot 按话题分
 会话——同一个 Bot、同样的能力和人格，每个话题一段独立的上下文。主对话里一个 AI 只有一条时间线：旁聊收成
-一张卡片，一轮结束或旁聊结束时多一行结果。约定有三件事，用户一侧的 App 照它们解读，Agent 一侧（ACP 桥、
-Agent 插件）照它们实现：
+一张卡片，一轮结束或旁聊结束时多一行结果。约定有三件事，用户一侧的 App 照它们解读，Agent 插件照它们实现：
 
 - 话题根 `app.wonton.side_chat`：开旁聊的那条根消息，用户一侧发。
 - 结果行 `app.wonton.side_chat_result`：Bot 一侧在主对话里报告旁聊的进展。
@@ -2428,22 +2427,24 @@ Agent 用编号调 `wonton__view_file`、`wonton__share_file`，用户的设备�
   | `wonton__set_profile` | 否 | 改你自己的 Bot 的名字或头像，不需要用户确认。`name`：新名字，去掉首尾空白后 1 到 32 个字符，不含控制字符，不能用核心（Wonton、云吞、雲吞）或用户的名字，不分大小写。`avatar`：静态头像在 outbox 里的相对路径。`avatars`：要改的状态，每项是相对 outbox 的路径，写 `null` 清掉这个状态，没写的不动。不收 `mxc://`。成功后删掉用过的 outbox 文件，失败时保留。每个 Bot 每小时最多成功改 10 次，超了返回 `rate_limited` 和还要等的秒数。 |
   | `wonton__user_locale` | 否 | 某人用的语言。`user_id` 是这台服务器上的 Matrix ID，省略时是主人；替某个人发言时一定要传他的 `user_id`，省了会拿到主人的语言。返回 `locale`（他最近一次请求的第一个语言标签，BCP 47 原样）和按偏好排的 `languages`（`*` 去掉）；没有记录时 `locale` 是 `null`、`languages` 是空数组。核心不替插件选默认语言。查主人以外的人要申请 `owner.identity`，没申请时一律 `permission_denied`（存在的人和陌生人是同一个错，不申请就探不出家里有谁）；不是本服务器的 ID 是 `not_this_server`，本服务器上不认识的人（含 Bot、已移除的家人）是 `not_found`。 |
   | `wonton__help` | 否 | Wonton 和 App 的帮助文档，见下面的“帮助文档”。 |
-  | `wonton__hand_off` | 是 | `target_bot`（含 `plugin_id`、`bot`）和非空 `message`；把首轮交给本服务器的目标 Bot，立即返回 `session`、`chain`，不等目标完成。调用方必须声明 `agent_acp`。 |
-  | `wonton__hand_off_status` | 否 | 可选 `session`；不填时列出当前 Bot 从当前房间和话题交出的会话，返回状态、链、时间和最近回复摘要。只读，不叫醒目标、不计轮数。 |
   | `wonton__send_message` | 是 | `recipient` 和 `body`；给 Bot 归属人的家人或好友发消息。通常先发确认卡片，批准后返回出箱项 ID，不等待私聊投递。 |
 
 - 插件目录就是官方索引（见“发布与来源”）。Bot 能装官方索引里的插件和自己写的插件（见“Agent 写插件”），不能装社区插件。
 - 敏感的调用会一直等到用户回答或者确认过期（10 分钟）。确认卡片不是聊天消息：核心推送给该回答它的用户，Wonton App 把它显示在
   发起这次调用的会话里和“等你确认”列表里，用户在 App 里回答。用户拒绝或者过期时工具返回错误（`isError: true`），说明原因。
+- 确认卡片发给谁：私人 Bot 的发给它的归属人，共享 Bot 和没有 Bot 的插件的发给主人。两种例外：这次调用的 AI 动手级别
+  （见 `WONTON_BOT_AI_LEVEL`）是 `admin_approves_deletes` 时，会删、会覆盖的调用发给管理员；装卸、升级插件和开关插件权限按
+  归属人的角色，能装的问他本人，要管理员批的发给管理员，不能装的直接返回 `permission_denied`，不发卡片。卡片上写着是哪个
+  Bot 发起的。
 - **报来源会话（可选）。** 卡片显示在哪个会话由调用方报，两种写法，两样都有时 `_meta` 为准：
   - `tools/call` 的 `params._meta` 里带 `app.wonton/origin`，值是 `{"room_id": "…", "thread_id": "…"}`：`room_id` 是
     `!` 开头的房间 ID；`thread_id` 可选，是话题根事件的 `$` 开头事件 ID。
   - 连总线时带请求头 `wonton-origin-room`，可选 `wonton-origin-thread`。适合改不了每次调用、但能给 MCP 服务器配固定
-    请求头的客户端，一个会话配一份（比如 ACP 的 `session/new` 里 `mcpServers[].headers`）。
+    请求头的客户端，一个会话配一份。
 
-  来源只决定卡片显示在哪，不影响谁能回答。核心只认你的 Bot 和用户都在的房间；没报、报的房间对不上或核对不了时，
-  卡片显示在 Bot 和用户的主私聊里。没有 Bot 的插件报了也不用，卡片只在“等你确认”列表里。话题里报的，App 暂时显示在
-  这个房间的主对话里。
+  来源只决定卡片显示在哪，不影响谁能回答。核心只认你的 Bot 和卡片的收件人都在的房间；没报、报的房间对不上或核对不了时，
+  卡片显示在 Bot 的主房间里，收件人不在主房间里（比如卡片发给了管理员）时只在“等你确认”列表里。没有 Bot 的插件报了
+  也不用，卡片只在“等你确认”列表里。话题里报的，App 暂时显示在这个房间的主对话里。
 
   ```json
   {"jsonrpc": "2.0", "id": 7, "method": "tools/call", "params": {
@@ -2452,37 +2453,18 @@ Agent 用编号调 `wonton__view_file`、`wonton__share_file`，用户的设备�
     "_meta": {"app.wonton/origin": {"room_id": "!r:home.example", "thread_id": "$root"}}
   }}
   ```
+- **报说话人。** 有 Bot 的插件在每次 MCP 请求（`tools/list` 和 `tools/call`）上带请求头 `X-Wonton-On-Behalf-Of`，值是
+  这一轮消息的说话人的 Matrix ID，如 `@mom:home.example`。说话人是这个 Bot 听的人（归属人、已成立的联系人，或者同一个
+  归属人的另一个 Bot）时，核心按他的角色给 AI 动手级别，`wonton__send_message` 的放行时段也只在说话人就是 Bot 的归属人时
+  生效。报的人这个 Bot 不听、或者是别的服务器上的人时，这次请求按只读处理，插件的工具也不给。
+  没带这个请求头时，核心从这个 Bot 报过的进行中的轮次里取说话人（见“Agent 插件”的“报轮次、取消和出箱”），同时有几轮时
+  按级别最低的算。轮次也没有时认不出是谁：私人 Bot 按归属人、共享 Bot 按能用它的人里最低的级别算，有远端联系人的 Bot 只聊天，
+  放行时段不生效。
 - 用户在 App 里点了“我来操作”时，这个插件的敏感调用先停住，不发卡片也不执行，用户交还后才继续判定。这段最多 10 分钟，
   和卡片各算各的，所以 Agent 的工具超时要超过 20 分钟。只读工具照常执行。停得太久或者停住的调用太多时返回错误，
   `_meta` 的 `app.wonton/failure` 是 `owner_operating`：调用明确没有执行，过一会可以重试。
 
-### Agent 调用链工具
-
-这三个工具只出现在声明了 `requires: [agent_acp]` 或 `wants: [agent_acp]` 的插件的 Bot 工具列表里。调用必须属于当前 ACP 会话和当前链；没有会话、会话不属于调用方或调用链已结束时，核心返回 `permission_denied`、`not_found` 或 `invalid_input`，不伪装成一次新的调用。
-
-**`wonton__hand_off`**
-
-参数：
-
-```json
-{"target_bot":{"plugin_id":"app.codex","bot":"owner"},"message":"修登录页并运行测试"}
-```
-
-`target_bot` 只能是本服务器上的 Bot，且目标必须听链代表的人；目标是调用方自己、或位于这次会话的祖先路径上时拒绝，分别是 `invalid_input` 的 `self_call` 或 `loop`。核心检查层数、轮数、花费和停链状态，然后经 `agent_acp` 开 `session/new` 并发出首轮。首轮已经写入目标连接后立即返回：
-
-```json
-{"session":"s-2","chain":"c-1"}
-```
-
-调用方不会收到目标的结果转发；目标在原房间、原话题里自己说进度和结果，调用方用 `wonton__hand_off_status` 查询，或等目标点名叫回。相同调用方会话和相同 MCP 请求 ID 的重试复用原会话；同一会话交给同一 Bot 且原文完全相同、原会话还在运行或等待权限时也复用。原会话结束、失败或停下后，同一句话可以开新会话。
-
-目标 Bot 不归链代表的人，或这是该插件第一次连到这个 Bot 时，先发 `HandOffConsent` 确认卡片。卡片写清“发起处 → 目标 Bot”，目标 Bot 的归属人确认后才开连接；交给自己名下已经确认过的 Bot 不重复询问。
-
-常见错误类别是：`invalid_input`（参数、自调、绕圈）、`permission_denied`（未声明能力、目标不听链代表的人、不是本地 Bot 或无权查看）、`limit_reached`、`stopped`、`busy`、`dependency_stopped`、`upstream_error`、`service_unavailable` 和 `storage`。这些类别来自核心，插件不要按人话消息猜原因。
-
-**`wonton__hand_off_status`**
-
-参数是可选的 `session` 字符串；省略时只列出当前 Bot 从当前房间和话题交出的会话。每项包含 `session`、目标 `bot`、`chain`、`status`、可空的 `stop_reason`、`started_at`、`last_activity_at` 和最多 2000 字的 `summary`。`status` 是 `running`、`waiting_permission`、`ended`、`stopped`、`limit_reached` 或 `failed`，不认识的值按 `other` 处理。这个工具只读，不发 ACP 帧、不叫醒目标、不增加轮数；查另一个 Bot 的会话返回 `permission_denied`，核心重启后找不到的旧会话返回 `not_found`。
+### 核心工具的用法
 
 **`wonton__send_message`**
 
@@ -2492,9 +2474,9 @@ Agent 用编号调 `wonton__view_file`、`wonton__share_file`，用户的设备�
 {"recipient":"mom","body":"周末回来吗？"}
 ```
 
-收件人必须是这个 Bot 归属人的家人或好友，陌生人直接返回 `permission_denied`，不发确认卡片。正常情况下核心发 `SendMessage` 确认卡片给 Bot 归属人，卡片显示收件人和完整正文；批准后工具返回 `{"outbox_item":"<项目 ID>"}`，不等待私聊投递。主人可以按收件人打开持续放行，但链的发起人不是这个 Bot 的归属人时每条仍需确认。
+收件人必须是这个 Bot 归属人的家人或好友，陌生人直接返回 `permission_denied`，不发确认卡片。正常情况下核心发 `SendMessage` 确认卡片给 Bot 归属人，卡片显示收件人和完整正文；批准后工具返回 `{"outbox_item":"<项目 ID>"}`，不等待私聊投递。主人可以按收件人打开放行时段，只在这一轮的说话人就是 Bot 的归属人时生效（见“使用工具”的“报说话人”），认不出说话人时每条都要确认。
 
-桥从 `GET /agent/outbox` 取到 `Message` 后，以 Bot 身份发进和收件人的私聊，用出箱项 ID 作幂等事务 ID，再在同一路径回报事件 ID 或失败类别。参数错误是 `invalid_input`，无 Bot、无链路或无权限是 `permission_denied` 或 `source_unavailable`，出箱存储失败是 `storage`；投递没有私聊时回报 `no_room`，不能在工具调用里假报已经送达。
+投递由 Agent 插件做：它从出箱取到这条消息，以 Bot 身份发进和收件人的私聊，再回报事件 ID 或失败类别（见“Agent 插件”的“报轮次、取消和出箱”）。不能在工具调用里假报已经送达。参数错误是 `invalid_input`，没有 Bot 或收件人不对是 `permission_denied`，出箱不可用是 `source_unavailable`，出箱存储失败是 `storage`。
 
 **Bot 存文件**
 
@@ -2544,7 +2526,7 @@ Agent 自带的工具（shell、文件这类不经 MCP 总线的）要动手之�
 - `choice_id` 由插件自己定，核心不解释，同一次请求内不能重复。`kind` 只能是 `allow_once`、`allow_always`、`reject_once`、`reject_always`；卡片上的按钮按 `options` 的顺序显示 `name`。
 - `allow_always` 的作用域归 Agent 自己，不写进核心的工具策略，也不放行 MCP 工具。
 - 没有拒绝类的选项时，核心在卡片上加一个“取消”。
-- `origin` 可选：这次请求来自哪个会话，形状和核对规则同“使用工具”里的 `app.wonton/origin`。ACP 桥按每个会话所在的房间和话题填它。
+- `origin` 可选：这次请求来自哪个会话，形状和核对规则同“使用工具”里的 `app.wonton/origin`。Agent 插件按这一轮所在的房间和话题填它。
 
 这是一个长请求，用户回答或者 10 分钟到期才返回，HTTP 客户端的超时要比这长：
 
@@ -2588,60 +2570,77 @@ Agent 自带的工具（shell、文件这类不经 MCP 总线的）要动手之�
 
 ## Agent 插件
 
-`kind: agent` 的插件是一个 Bot 的驱动。`protocol: matrix` 的 Agent 自己登录 Matrix；`protocol: acp` 的由 ACP 桥接到聊天。编排器也是一个 Bot：它可以同时 `provides.agent_acp`，并在 `requires` 或 `wants` 里声明 `agent_acp`，把任务交给其他 Agent。核心选择提供方时排除编排器自己；只有自己提供时，`requires` 装不上，`wants` 则不建立自连。
-桥在 `session/new` 交给 Agent 的 `mcpServers[].headers` 里放这个会话的 `wonton-origin-room`（和 `wonton-origin-thread`），
-Agent 调总线时自然带上，确认卡片就显示在这个会话里，Agent 不用改。
+`kind: agent` 的插件是一个 Bot 的驱动：Agent 用自己的 Matrix 客户端，以核心发的 Bot 身份收发消息（`protocol: matrix`）。编排器也是一个 Bot：它可以同时 `provides.agent_acp`，并在 `requires` 或 `wants` 里声明 `agent_acp`，把任务交给其他 Agent。核心选择提供方时排除编排器自己；只有自己提供时，`requires` 装不上，`wants` 则不建立自连。
 
-### ACP 运行时和编排器
+Wonton 自带的 Agent 是 Hermes。别的 Agent 由作者按这一节自己做成插件。
 
-声明 `agent_acp` 的提供方必须在自己的服务上提供 ACP WebSocket `/acp`。使用方连接注入的 `WONTON_AGENT_ACP_URL`，把路径加成 `/acp`；不能绕过核心直接访问提供方。核心只把带提供方令牌的连接转给它，并覆盖使用方自带的同名请求头：
+### 自己做一个 Agent 插件
 
-- `X-Wonton-Plugin`：使用方插件 ID；
-- `X-Wonton-User`：链代表的人；
-- `X-Wonton-Bot`：目标 Bot，格式为 `<插件 ID>#<Bot 名>`；
-- `X-Wonton-Chain`：调用链 ID；
-- `X-Wonton-Max-Depth`、`X-Wonton-Max-Rounds`、`X-Wonton-Max-Tokens`：这条链的层数、轮数和 token 上限；
-- `Authorization: Bearer <提供方令牌>`：只有提供方网关服务能使用，不能写进清单或交给 Agent。
+最小的清单。左边的变量名按你的 Agent 认的写：
 
-提供方和使用方都不能自行改变这些值。连接或请求被核心拒绝时，使用方按类别处理：`permission_denied`（身份、Bot 或归属人不允许）、`busy`（使用方连接数已满）、`limit_reached`（`depth`、`rounds` 或 `cost`）、`stopped`（链已停）、`invalid_input`（自调或绕圈）和上游错误。`limit_reached`、`stopped` 和 `invalid_input` 不要自动重试或换一条链继续原任务。
+```yaml
+name: my-agent
+services:
+  agent:
+    image: ghcr.io/example/my-agent:1.0.0@sha256:<摘要>
+    restart: unless-stopped
+    environment:
+      MATRIX_HOMESERVER: ${WONTON_MATRIX_HOMESERVER}
+      MATRIX_USER_ID: ${WONTON_MATRIX_USER_ID}
+      MATRIX_ACCESS_TOKEN: ${WONTON_MATRIX_ACCESS_TOKEN}
+      MATRIX_ALLOWED_USERS: ${WONTON_MATRIX_ALLOWED_USERS}
+      MATRIX_HOME_ROOM: ${WONTON_MATRIX_HOME_ROOM}
+      WONTON_MCP_URL: ${WONTON_MCP_URL}
+      WONTON_BOT_AI_LEVEL: ${WONTON_BOT_AI_LEVEL}
+      MODEL_API_KEY: ${WONTON_SECRET_MODEL_API_KEY}
+    volumes:
+      - ${WONTON_BOT_DATA}:/data
+    healthcheck:
+      test: ["CMD", "my-agent", "health"]   # Matrix 连上了才算健康
+      start_period: 60s
+      start_interval: 2s
 
-**轮次登记。** 桥在每次 `session/prompt` 前先用总线令牌访问 `POST /agent/chains`，并在 `X-Wonton-Bot-Token` 里带这个 Bot 的 Matrix 访问令牌。总线令牌来自 `WONTON_MCP_URL` 的路径；只有总线令牌不够。`start` 的请求包括 ACP `session`、`room`、可选的 Matrix `thread`、实际 `sender` 和触发消息的 `event_id`：
-
-```http
-POST /agent/chains
-X-Wonton-Bot-Token: <Bot 的 Matrix 访问令牌>
-Content-Type: application/json
-
-{"phase":"start","session":"s-1","room":"!room:example.org","thread":"$root","sender":"@owner:example.org","event_id":"$event"}
+x-wonton:
+  spec: "0.15"
+  id: io.example.my-agent
+  version: 1.0.0
+  kind: agent
+  title: { zh: 我的助手, en: My Agent }
+  description: { zh: 在聊天里帮你查资料、写东西, en: Looks things up and writes for you in chat }
+  agent:
+    protocol: matrix
+  bot:
+    display_name: { zh: 我的助手, en: My Agent }
+  bots:
+    services: [agent]
+  secrets:
+    model_api_key:
+      input:
+        title: { zh: 模型服务的 API 密钥, en: Model API key }
+  permissions: [matrix.bot, tools, network.egress]
 ```
 
-核心成功才返回 `{ "chain": "<链 ID>", "layer": 1 }`，桥随后才发送 `session/prompt`；失败时返回带类别的错误，不得把这一轮发给 Agent。轮次成功、取消或出错后，桥用同一令牌发送 `{"phase":"end","session":"s-1"}`。MCP 请求使用 `wonton-session: s-1` 头，核心用它把工具调用归到当前轮次。
+- **Bot 身份。** `kind: agent` 要写 `agent.protocol: matrix`，并申请 `matrix.bot`。核心建好 Bot 账号、发令牌、建好和用户的
+  加密私聊（`WONTON_MATRIX_HOME_ROOM`），见“Matrix Bot”。`WONTON_MATRIX_ALLOWED_USERS` 以外的人说话不要理。
+- **每人一个 Bot。** 写了 `bots.services`，家人才能有自己的私人 Bot，主人也能建共享 Bot：每个 Bot 一组容器、一份
+  `${WONTON_BOT_DATA}`，见“一个插件多个 Bot”。
+- **工具。** 申请 `tools`，把 `WONTON_MCP_URL` 配成 Agent 的 MCP 服务器（Streamable HTTP），就能用核心和其他插件的工具，
+  见“工具与 MCP 总线”。每次请求都报说话人，见“使用工具”的“报说话人”。
+- **健康检查。** 检查 Agent 真的连上了 Matrix，不只是进程还在，见“健康检查”。
+- **端到端加密。** Bot 的主房间、App 建的私聊和群默认都加密，不支持加密的 Agent 收不到用户的话。加密状态放在
+  `${WONTON_BOT_DATA}` 里，容器重建后还在；首次启动建的恢复密钥用 `secrets` 的 `collect` 交给核心保管（见“插件密钥”）。
+  缺加密依赖时启动失败，不要只在不加密的房间里干活。
+- **模型。** 模型由插件自己接：用户在密钥里填服务商的 key（上面的 `input`），或者在 Agent 自己的网页里设，请求经
+  `network.egress` 出去。家里装着模型网关时可以 `wants: [models]` 用它（见“模型网关”），不是必需的。没配好模型、key 不对时
+  在聊天里如实说，不要悄悄换别的模型。
+- **自带工具。** Agent 容器里的 shell、读写文件这类工具不经核心：它们读得到这个 Bot 数据目录里的一切，包括聊天记录、
+  记忆、Matrix 令牌和模型密钥。核心只管经 MCP 总线的调用。要让用户确认自带工具的动作，用“Agent 权限确认”；
+  `WONTON_BOT_AI_LEVEL` 不是 `self_confirms` 时用 Agent 最严的那档模式。README 里写明这些风险，不要说“所有动作都经核心确认”。
+  `kind: agent` 的插件也不能申请很高和最高级权限（见“权限”）。
+- **发布。** 和普通插件一样：公开仓库加 topic `wonton-plugin`，或者放进自己的索引（见“发布与来源”），商店标“未审核”。
+  官方索引只收 Wonton 自己维护的 Agent 插件。
 
-**出箱。** 桥用同一条门和同一个 `X-Wonton-Bot-Token` 长轮询 `GET /agent/outbox`，没有项目时得到 `null`；取到项目后在同一路径 `POST` 回报：
-
-```json
-{"id":"out-1","kind":{"type":"cancel_turn","chain":"c-1","session":"s-1"}}
-```
-
-`CancelTurn` 要求桥对该 ACP 会话发送 `session/cancel`，并让这个会话所有未决的权限请求返回 `cancelled`，再回报 `{"id":"out-1","result":{"result":"sent","event_id":""}}`。`Message` 项则要求桥以 Bot 身份把正文发进收件人的私聊，再回报发送的 Matrix 事件 ID。未知项目要跳过并按失败类别回报，不能猜它的动作。
-
-**权限卡片过期。** Agent 发起 `session/request_permission` 后，核心的确认卡片过期时，桥必须先向同一 ACP 会话发送 `session/cancel`，再把原权限请求回答为 `{"outcome":{"outcome":"cancelled"}}`。不要先回 `cancelled`：取消是撤掉这一轮的动作，顺序反了会让 Agent 继续执行。
-
-### 调用链载体
-
-每轮 `session/prompt` 的 `_meta` 可以带 `app.wonton/chain`，值只有这两个字段：
-
-```json
-{"_meta":{"app.wonton/chain":{"id":"<链 ID>","depth":1}}}
-```
-
-`id` 是核心发的链 ID，`depth` 是带这个载体的会话所在层数。核心给下一跳的 `session/new` 也会写这个对象；编排器把收到的对象原样抄到下一跳的 `session/new`，不生成新 ID、不把层数清零。不认识调用链的 Agent 可以不带它，那一跳按新链处理。
-
-链 ID、层数、轮数和花费以核心账本为准，不以 Agent 自报为准：已登记且属于当前使用方的链，下一跳层数是 `max(账本层数, depth) + 1`；链 ID 未登记、已结束或不属于当前使用方时开新链，继续使用的 `depth` 加一；没有载体时从第 1 层开始；已停的链仍返回 `stopped`；载体缺字段、类型不对、`depth` 为负数或超出范围时返回 `invalid_input`，不建立会话。
-
-所有新的 `session/prompt` 都计入这条链的轮数，模型网关的 token 也按链记账。达到层数、轮数或花费上限时核心返回 `limit_reached` 并发上限卡片；停链后所有新的轮次、ACP 请求和模型请求都返回 `stopped`。
-
-**账号登录。** 模型默认经模型网关。Agent 官方程序能用账号登录时，在 `agent.login` 里声明，核心经引导和插件详情的接口把选项交给 App：
+**账号登录。** Agent 官方程序能用账号登录时，在 `agent.login` 里声明，核心经引导和插件详情的接口把选项交给 App：
 
 ```yaml
 x-wonton:
@@ -2664,13 +2663,121 @@ x-wonton:
 生效；有一条不生效就带着原因退出，不启动。上游版本升级会改配置的键名和结构，启动时的校验挡住这类漂移：
 配置悄悄失效比启动失败难查得多。
 
-**帮助 skill。** 官方 Agent 插件要带 [`skills/wonton-help`](skills/wonton-help/SKILL.md)，放进这个 Agent 读 skill 的目录。不带时用户问 Wonton 的用法，Agent 不一定想得到调 `wonton__help`：
+**帮助 skill。** 官方 Agent 插件要带 [`skills/wonton-help`](skills/wonton-help/SKILL.md)，放进这个 Agent 读 skill 的目录，
+如 Hermes 的 `$HERMES_HOME/skills`。不带时用户问 Wonton 的用法，Agent 不一定想得到调 `wonton__help`。
 
-| Agent | 目录 |
-| --- | --- |
-| Hermes | `$HERMES_HOME/skills` |
-| Claude Code | `~/.claude/skills` |
-| Codex、OpenClaw、omp、Gemini CLI、OpenCode、Kimi Code 和其他读 Agent Skills 共用目录的 | `~/.agents/skills` |
+### 报轮次、取消和出箱
+
+Agent 插件每轮开始、结束时向核心报一声，再取核心的出箱。报了，主人停链才打得断正在跑的这一轮，`wonton__send_message`
+批准的消息才有人投递：不取出箱时，批准的消息一直排在出箱里，送不出去。
+
+三个接口和 `WONTON_MCP_URL` 同一个地址，路径把 `mcp/<令牌>` 换成 `agent/chains/<令牌>`、`agent/outbox/<令牌>`。只有有 Bot 的
+插件能用，请求头 `X-Wonton-Bot-Token` 带这个 Bot 的 Matrix 访问令牌（`WONTON_MATRIX_ACCESS_TOKEN`）：总线令牌 Agent 自己也
+拿得到，只有它不够。Matrix 令牌缺了或不是这个 Bot 的时得到 403 `permission_denied`。
+
+**开轮。** 把一轮交给模型之前：
+
+```http
+POST /agent/chains/<总线令牌>
+X-Wonton-Bot-Token: <Bot 的 Matrix 访问令牌>
+Content-Type: application/json
+
+{"phase":"start","session":"s-1","room":"!room:home.example","thread":"$root","sender":"@mom:home.example","event_id":"$event"}
+```
+
+- `session` 是 Agent 自己的会话 ID。这一轮里的 MCP 请求都带请求头 `wonton-session: s-1`，核心按它把工具调用和确认卡片
+  归到这一轮。上一轮报了 `end`，同一个会话才能报下一轮的 `start`。
+- `room` 和 `thread` 是触发这一轮的消息所在的房间和话题，不在话题里时不带 `thread`。
+- `sender` 是说话人的 Matrix ID，必须是这个 Bot 听的人（归属人、已成立的联系人，或者同一个归属人的另一个 Bot），
+  否则 403 `permission_denied`。
+- `event_id` 是触发这一轮的那条消息。别的 Bot 经 `WONTON_MATRIX_HOMESERVER` 发来、点了这个 Bot 名的消息，核心认得它属于
+  哪条链，这一轮接在那条链上，算进它的层数和轮数；其余的开一条新链。
+
+成功时返回 `{"chain":"<链 ID>","layer":1}`。失败时响应头 `x-wonton-error` 写着类别；被链拒绝的，响应体也是带类别的
+JSON，如 `{"type":"limit_reached","kind":"rounds"}`：
+
+| 类别 | 状态码 | 含义 |
+| --- | --- | --- |
+| `permission_denied` | 403 | 说话人不是这个 Bot 听的人，或者令牌不对。 |
+| `stopped` | 409 | 这条链被人停了。 |
+| `limit_reached` | 429 | 到了上限，`kind` 写明是层数（`depth`）还是轮数（`rounds`）。核心给主人发上限卡片。 |
+| `invalid_input` | 400 | 请求体不对，或者这个会话的上一轮还没报 `end`。 |
+| `storage` | 500 | 核心记不下这一轮。 |
+
+被拒的这一轮不要交给模型，在房间里告诉用户原因；`stopped`、`limit_reached` 不要自动重试。不认识的类别按失败处理。
+
+**结束。** 这一轮答完、出错或被取消，都报 `{"phase":"end","session":"s-1"}`，返回 `{}`。
+
+**出箱。** 用同一个请求头长轮询 `GET /agent/outbox/<总线令牌>`，最多挂 25 秒，没有项时返回 `null`。取到一项就照做，
+再 `POST` 到同一路径回报：
+
+```json
+{"id":"out-1","kind":{"type":"cancel_turn","chain":"c-1","session":"s-1"}}
+{"id":"out-2","kind":{"type":"message","recipient":"mom","body":"周末回来吗？"}}
+```
+
+- `cancel_turn`：主人停了这条链。打断这个会话正在跑的一轮，它等着的权限请求按取消处理，然后回报
+  `{"id":"out-1","result":{"result":"sent","event_id":""}}`。
+- `message`：`wonton__send_message` 批准了的消息。以 Bot 的身份把正文发进 Bot 和收件人的私聊（`recipient` 和工具参数一样
+  是用户名），用项 ID 当 Matrix 的事务 ID，回报发出的事件 ID：`{"id":"out-2","result":{"result":"sent","event_id":"$e"}}`。
+  没有和收件人的私聊时回报 `{"id":"out-2","result":{"result":"failed","category":"no_room"}}`。
+- 取走没回报的 `message` 项，下次轮询会再给一次：用项 ID 当事务 ID，服务器按它去重，房间里只有一条。
+- 不认识的项不要猜怎么做，回报 `{"result":"failed","category":"other"}`。回报的项 ID 不在等回报的项里时返回 404 `not_found`。
+
+### Matrix 上的约定
+
+**进度。** 一轮做得久时，Agent 发一条状态消息说做到哪了，格式照
+[MSC4564](https://github.com/matrix-org/matrix-spec-proposals/pull/4564)：一轮一条 `m.notice`，之后用 `m.replace` 编辑推进，
+App 看最新的编辑。
+
+```json
+{"msgtype":"m.notice","body":"正在执行命令（第 3 步）",
+ "org.fluxchat.agent":{"v":1,"run":"$request","state":"working","step":"执行命令","steps":3}}
+```
+
+- 键是 `org.fluxchat.agent`（提案稳定后是 `m.agent`，两个都有时以 `m.agent` 为准），`v` 必须是 `1`。`state` 是 `working`、
+  `waiting`（等用户）、`done`、`failed`；可选 `run`（这一轮针对的请求消息）、`step`、`steps`、`progress`（0 到 1）、`result`。
+- 被打断、结果不确定的结束仍写 `failed`，内容里再加 `"app.wonton.end": "cancelled"` 或 `"uncertain"`，App 不把它画成失败。
+- `waiting` 时可以带 `choices`（`[{"key": "…", "label": "…"}]`）：用户点了，以用户的身份对这条消息发 `m.annotation` 反应，
+  键是选项的 `key`。它答的是 Agent 自己的问题，不是 Wonton 的确认。
+- 答案照常另发一条消息。`body` 写成一句人话，不认识这个格式的客户端看到的就是它。App 只对核心认得的 Bot 账号解读状态。
+
+**附件分组。** App 一次发几张照片或几个文件时，每条事件内容的顶层带同一个标记：
+
+```json
+"app.wonton.batch": {"v": 1, "id": "3f0c9a1e5b7d42c6a8e1f0b2c4d6e8a0", "index": 0, "count": 3}
+```
+
+- 按（房间、发送者、`id`）收齐 `0` 到 `count - 1` 再当一轮处理，按 `index` 排序。用户的字在最后一条上：照片的说明文字，
+  或者带文件链接的那条 `m.text`。
+- `v` 不是 `1`、`id` 不是 32 个小写十六进制字符、`count` 不在 1 到 32 之间、`index` 不小于 `count` 时，当没有标记，一条一轮。
+- 一组的事件是连着发出的。等了一两分钟还收不齐，就用已经到的开一轮，告诉用户少了几条。
+
+**文件链接。** 用户发的文件在消息正文里是一行一个 `wonton://file/<编号>`。把编号交给 `wonton__view_file` 看内容。
+要把文件交给用户，调 `wonton__share_file`，把返回的链接原样放进回复，App 把它画成文件卡片。
+
+**群聊。**
+
+- 私聊里每条都回。群里只回点了它名的：`m.mentions.user_ids` 里有它，或者回复它发的消息。别的 Bot 发来的话只认 `m.mentions`，
+  免得两个 Bot 顺着回复链聊下去。
+- 收到的 `m.notice` 一律不回，也不当上下文。Bot 自己的进度和提示发 `m.notice`，正式回答发 `m.text`。
+
+**频率和跳数。** Bot 经 `WONTON_MATRIX_HOMESERVER` 发消息，核心按 Bot 和房间限频：每分钟 20 条，最多连发 10 条，编辑也算。
+超了回 429 `M_LIMIT_EXCEEDED`，按 `retry_after_ms` 等。人没插话时几个 Bot 在一个房间里来回说到 20 跳，换一个 Bot 说话会被拒：
+403，`errcode` 是 `APP.WONTON.HOP_LIMIT`，不要重试，主人在 App 里点继续后清零。同一个 Bot 接着说不算一跳。
+
+### ACP 运行时和编排器
+
+声明 `agent_acp` 的提供方必须在自己的服务上提供 ACP WebSocket `/acp`。使用方连接注入的 `WONTON_AGENT_ACP_URL`，把路径加成 `/acp`；不能绕过核心直接访问提供方。核心只把带提供方令牌的连接转给它，并覆盖使用方自带的同名请求头：
+
+- `X-Wonton-Plugin`：使用方插件 ID；
+- `X-Wonton-User`：链代表的人；
+- `X-Wonton-Bot`：目标 Bot，格式为 `<插件 ID>#<Bot 名>`；
+- `X-Wonton-Chain`：调用链 ID；
+- `X-Wonton-Max-Depth`、`X-Wonton-Max-Rounds`、`X-Wonton-Max-Tokens`：这条链的层数、轮数和 token 上限；
+- `Authorization: Bearer <提供方令牌>`：只有提供方网关服务能使用，不能写进清单或交给 Agent。
+
+提供方和使用方都不能自行改变这些值。连接或请求被核心拒绝时，使用方按类别处理：`permission_denied`（身份、Bot 或归属人不允许）、`busy`（使用方连接数已满）、`limit_reached`（`depth`、`rounds` 或 `cost`）、`stopped`（链已停）、`invalid_input`（自调或绕圈）和上游错误。`limit_reached`、`stopped` 和 `invalid_input` 不要自动重试或换一条链继续原任务。
 
 ## 插件设置（`settings`）
 

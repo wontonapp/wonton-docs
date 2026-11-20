@@ -3385,6 +3385,11 @@ x-wonton:
   主人等着的操作至少等这么久，60 到 1800 秒。它只放宽下限，`start_period` 的规则不变。
 - 检查只能用镜像里已有的命令；`scratch`、`distroless` 镜像没有 `curl`、`wget` 或 shell 时，网页服务直接省略
   `healthcheck`，不用改镜像或安装工具。
+- 配了代理时，核心把 `wget` 和 shell（`sh -c`）写法的健康检查改成不走代理，优先用这两种；镜像里没有 `wget`
+  再用程序自己的绕开办法，比如 Python 的 `urllib` 传空的 `ProxyHandler`。`python3 -c` 这类写法核心不改写。
+- `wget` 一般都来自镜像里的 busybox，换成 Debian、Ubuntu 这类 slim 镜像要自己装（`apt-get install -y wget`），
+  或改用程序自己的绕开办法。`wget` 对非 2xx 退非 0，检查的路径要能返回 2xx；会被网关拦成 401 的路径
+  用 `webui.health` 指到不鉴权的地址。
 - 默认探测 `GET http://<网页服务在插件网络里的地址>:<webui.port><webui.path>`，`webui.path` 默认 `/`。
   请求由核心直连插件网络，不经网关鉴权，不带主人会话；宿主网络服务经核心的中继访问同一个端口和路径。
   不跟随重定向，2xx–4xx 都算存活（包括跳转登录、401、403、404）；5xx 算上游出错，连不上和超时也算失败。

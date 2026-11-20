@@ -2460,7 +2460,11 @@ Agent 用编号调 `wonton__view_file`、`wonton__share_file`，用户的设备�
   没带这个请求头时，核心从这个 Bot 报过的进行中的轮次里取说话人（见“Agent 插件”的“报轮次、取消和出箱”），同时有几轮时
   按级别最低的算。轮次也没有时说不出替谁办事：私人 Bot 和共享 Bot 都按只读处理，会改、会删的工具不列出，调了返回
   `permission_denied`；有远端联系人的 Bot 只聊天，放行时段不生效。要 Bot 动手，就带这个请求头或报轮次。定时任务这类没有人在说话的轮次，
-  插件应该把创建这条任务的人作为 `X-Wonton-On-Behalf-Of` 带上，核心照样核对他是不是这个 Bot 听的人。
+  插件应该把创建这条任务的人作为 `X-Wonton-On-Behalf-Of` 带上，核心照样核对他是不是这个 Bot 听的人。创建者从上游取：
+  `ctx.current_cron_execution()` 给出 `job_id`，再用 `cron.jobs.get_job(job_id)` 读 `origin`；只有 `origin["platform"]` 是
+  `matrix` 且 `origin["user_id"]` 非空时才是创建者、才带这个头，其余情况如实按进行中的轮次或只读，不猜。定时任务里再经
+  `delegate_task` 起的子代理取不到这次执行（`current_cron_execution()` 是 `None`），按创建者补头盖不住它们，会按只读；
+  要它们动手，起子代理时把创建者带过去。
 - 用户在 App 里点了“我来操作”时，这个插件的敏感调用先停住，不发卡片也不执行，用户交还后才继续判定。这段最多 10 分钟，
   和卡片各算各的，所以 Agent 的工具超时要超过 20 分钟。只读工具照常执行。停得太久或者停住的调用太多时返回错误，
   `_meta` 的 `app.wonton/failure` 是 `owner_operating`：调用明确没有执行，过一会可以重试。

@@ -1529,14 +1529,15 @@ x-wonton:
 | `WONTON_SETTING_<名字>` | 清单声明了这一项，服务引用了它 | 设置，名字转成大写，如 `WONTON_SETTING_BUDGET`。值的写法见“插件设置”。 |
 | `WONTON_BOT_NAME`、`WONTON_BOT_DATA` | `bots.services` 里的服务 | Bot 名和这个 Bot 的数据目录（宿主路径）。 |
 | `WONTON_BOT_AI_LEVEL` | `matrix.bot` 或 `bots.services` 里的服务 | 这个 Bot 能让 AI 动手到哪一级：`read_only`（只给只读的工具）、`admin_approves_deletes`（改的自己确认，删的要管理员批）、`self_confirms`（都自己确认）。私人 Bot 按归属人的角色，共享 Bot 取能用它的人里最低的一级。归属人的级别是 `read_only` 时，这个私人 Bot 的共享文件夹挂载一律只读，声明了写权限也一样。Agent 插件凭它选自带工具的模式：不是 `self_confirms` 时用最严的那档；不认识的值按 `read_only`。 |
-| `WONTON_GPU_VENDOR` | 给了显卡 | 选中那家的显卡的厂商：`amd`、`nvidia`、`intel`。各家参数不同时用它插值；不给显卡时不存在（不是空串）。 |
+| `WONTON_GPU_VENDOR` | 给了显卡 | 选中那家的显卡的厂商：`amd`、`nvidia`、`intel`。核心把它直接写进拿到显卡的服务的环境，容器里能直接读，也能用于 compose 插值；不给显卡时不存在（不是空串）。 |
 | `WONTON_PERMISSION_DOCKER_SOCKET`、`_DEVICES_GPU`、`_DEVICES_SERIAL`、`_DEVICES_USB` | 对应的可选权限开着 | 值是 `1`。关着时不定义（不是空串），用 `${VAR:+x}` 或 `[ -n "$VAR" ]` 判断。给这个插件的所有服务，不只拿到字段的那个。 |
 | `WONTON_LAN_ADDRESSES` | `network.lan` | 局域网端口开在哪些地址上，逗号分隔，如 `192.0.2.10`。地址变化时的重建规则见“局域网”。 |
 | `WONTON_EXTERNAL_URL` | `clients.http`，或 `webui.guests: true` | 这个 App 对外的规范 origin，不带路径和末尾 `/`：公网入口开着时是公网地址，否则是局域网入口的地址，都没开时和 `WONTON_APP_URL` 相同。往外部服务登记回调地址、只认一个地址的应用用它，见“第三方 App 入口”。 |
 | `WONTON_PROXY_URL` | `network.egress` | 出口容器的地址 `http://egress.wonton.internal:3128`，用户没配代理时是空串。给有自己代理设置、不读 `HTTP_PROXY` 的程序用，见“网络”。 |
 
 - 这些变量只用于 compose 插值（`${VAR}`、`${VAR:-默认值}` 等，`$$` 表示字面量 `$`），不会自动进入
-  容器环境；需要的变量在对应服务的 `environment` 里显式引用，密钥和设置只给用得到它的容器。
+  容器环境。唯一例外是 `WONTON_GPU_VENDOR`：核心直接把它写进拿到显卡的服务的环境，启动命令里能直接读。
+  其他变量要在对应服务的 `environment` 里显式引用，密钥和设置只给用得到它的容器。
 - 引用了没有注入的变量且没有默认值时，安装失败，而不是像 docker compose 那样替换成空串。例如没有声明
   `sso: oidc` 却引用 `WONTON_OIDC_CLIENT_SECRET`，或者模型网关不提供 Anthropic 接口却引用
   `WONTON_MODEL_ANTHROPIC_BASE_URL`。核心不把自己的环境变量传给插件。
@@ -3111,8 +3112,9 @@ x-wonton:
   没有的厂商用通用镜像，这是作者说过的组合。
 - 不给显卡时一律用通用镜像。`need: optional` 本来就要求插件自己退回 CPU，它的通用镜像得能在 CPU 上跑；只有厂商专门版、
   没有能跑 CPU 的镜像的插件写 `need: required`。主机没有支持的显卡就是“本机显卡不支持”，不会静默退回 CPU。
-- 核心给拿到显卡的服务注入 `WONTON_GPU_VENDOR`（`amd`、`nvidia`、`intel`），给了显卡才有，见“安装时注入的变量”。各家的
-  命令行参数或环境变量不同时，用 `${WONTON_GPU_VENDOR}` 插值，不用为每家各写一份 `environment`。
+- 核心给拿到显卡的服务注入 `WONTON_GPU_VENDOR`（`amd`、`nvidia`、`intel`），给了显卡才有，见“安装时注入的变量”。它
+  同时进 compose 插值和这个服务的环境：各家的命令行参数或环境变量不同时，用 `${WONTON_GPU_VENDOR}` 插值，启动命令里也能
+  直接读 `$WONTON_GPU_VENDOR`，不用为每家各写一份 `environment`。
 - 厂商版镜像常比通用镜像支持的架构少（只有 `amd64`）。核心在预览时读镜像的平台列表，不支持本机架构时这家算不能用，接着看
   下一家，都不行就按上面两条处理。`requirements.arch` 仍管整个插件，只对通用镜像。
 - 厂商版镜像和通用镜像一样要按摘要固定，官方索引收录每一个厂商版镜像之前都要先在那种显卡的真实主机上实测通过。
@@ -3460,7 +3462,7 @@ x-wonton:
   - 核心给声明了 `network.egress` 的插件的每个服务（写了 `network_mode: none` 的除外：`none` 不出网；`service:<服务名>` 照常写）写好 `HTTP_PROXY`、`HTTPS_PROXY`、`http_proxy`、`https_proxy`、`NO_PROXY`、
     `no_proxy` 和 `NODE_USE_ENV_PROXY=1`。地址是出口容器 `http://egress.wonton.internal:3128`，插件看不到用户的代理。`NO_PROXY` 已经包含回环、
     `.localhost`、`.wonton.internal`、本插件的服务名和 IPv4 私有网段（10/8、100.64/10、169.254/16、172.16/12、192.168/16；插件网络和
-    `--lan` 网络的网段都在这些私有网段里。IPv6 网段条目会把 httpx 这类读了 `NO_PROXY` 的客户端建连接时弄崩，所以不写）。没配代理时这些变量都不写。这是核心唯一直接写进容器环境的一组变量。
+    `--lan` 网络的网段都在这些私有网段里。IPv6 网段条目会把 httpx 这类读了 `NO_PROXY` 的客户端建连接时弄崩，所以不写）。没配代理时这些变量都不写。除了 `WONTON_GPU_VENDOR`，这是核心唯一直接写进容器环境的一组变量。
   - 宿主网络的服务解析不了 `egress.wonton.internal`（宿主网络里没有 Docker 的 DNS）：这些服务拿到的是出口容器在插件网络里的固定地址 `http://<地址>:3128`，同样只由核心写，换代理地址不变。没有宿主网络服务的插件不受影响。
   - compose 里写了同名代理变量时以 compose 为准，写成空就是这个服务不走代理。写了 `NO_PROXY` 或 `no_proxy` 时核心不覆盖，把自己名单里缺的条目并到后面：作者写的名单常常只有自己的服务，少了核心的条目，插件内部的请求会被送去用户的代理，上游解析不了插件的服务名，得到 502 一类的错。不要写具体的代理地址：官方索引不收，换一台主机也用不了。
   - 镜像自己带了代理变量（`docker inspect --format '{{.Config.Env}}' <镜像>` 能看到）时，在 compose 里把它们写成空（`HTTP_PROXY: ""` 这样，核心不注入的名字也一样），或者从镜像里去掉。不然这些变量原样进容器：没配代理、或插件没声明 `network.egress` 时核心什么都不注入，应用照着镜像里的地址走，同插件的内部请求也发给那个代理。声明了 `network.egress` 且配了代理时，核心注入的变量盖掉镜像里同名的，核心不管的名字（如 `ALL_PROXY`）原样保留。

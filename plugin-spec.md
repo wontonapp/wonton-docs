@@ -1,4 +1,4 @@
-# 插件规范 `x-wonton`（草案 v0.15）
+# 插件规范 `x-wonton`（草案 v0.16）
 
 > 草案，字段可能调整。正式发布之前规范直接改，不保留旧写法：核心只认当前的写法，插件跟着升。
 
@@ -371,6 +371,10 @@ services:
 ### 各版本新增的字段
 
 清单用到下面某一版新增的字段时，`spec` 至少写那一版，`plugin check` 会逐项检查。
+
+**0.16**
+
+- `provides.<名字>.operations`、`provides.<名字>.kinds`：提供方自报能做的操作（`upload`/`download`/`playback`/`list`）和内容种类（`photo`/`video`/`audio`）。`media_source` 必须两项都写（见“媒体源：清单声明”），清单至少写 `spec: "0.16"`。
 
 **0.15**
 
@@ -1605,6 +1609,7 @@ x-wonton:
   | `matrix_rtc` | MatrixRTC 的 LiveKit 授权服务（MSC4195：`/sfu/get`、`/get_token`），见“通话授权服务”。没有使用方声明，不能写在 `requires`/`wants` 里 | 不用 | 否 |
   | `torrent_client` | qBittorrent Web API v2（`/api/v2/`） | 不用 | 否 |
   | `jellyfin` | Jellyfin 的 HTTP API | 要，在 `provides.jellyfin.credentials` 里 | 否 |
+  | `media_source` | 媒体源：HTTP。`GET /_wonton/capabilities` 自报 `operations` 与 `kinds`，条目、上传、播放计划各走 `/items`、`/uploads`、`/playback`；每个请求带 `X-Wonton-User`（任务或会话的主人），失败回 `MediaFailure` 信封，见“媒体源：路径”和“媒体源：错误信封” | 要，在 `provides.media_source.credentials` 里 | 否 |
   | `static_web` | 托管：HTTP 静态文件（RFC 9110 的 `GET`/`HEAD`、条件请求、`Range`），站点根是挂载点下的 `<X-Wonton-Plugin>/`。`runtime: static_web` 的插件隐含 `requires` 它，不用再写 | 不用 | 否 |
   | `web_storage` | 托管：WebDAV（RFC 4918）整文件读写的子集，见“静态网页的数据” | 不用 | 否 |
   | `personal_data` | 位置和健康数据的存取：`POST /location`、`POST /health`、`GET /query`、`DELETE /data`、`GET /export`、`POST /cleanup`；每个请求带 `X-Wonton-User`（数据属于谁），类型名和 JSON 形状见 wontonapp/wonton 的 `wonton-protocol` 库里 `personal_data` 的文档和常量 | 要，在 `provides.personal_data.credentials` 里 | 否 |
@@ -1739,6 +1744,120 @@ x-wonton:
       volumes:
         - ${WONTON_MATRIX_CA_DIR}:/etc/wonton-ca:ro
   ```
+
+### 媒体源：清单声明
+
+核心是使用方，插件当提供方，把家里的媒体库接进来。核心不认 Immich、Jellyfin 这类名字，换一个源只换插件。这项能力和 `jellyfin` 并存：`jellyfin` 给 Seerr 这类窄用途，`media_source` 管播放与传输，同一个插件可以两样都提供，Seerr 不用迁。
+
+在 `provides` 下按能力名声明 `media_source`，写清它监听的服务、能做的操作和内容种类（代码里的字段叫 `provides.capabilities`，清单里不写这一层）：
+
+```yaml
+services:
+  adapter:
+    image: ghcr.io/example/media-source:1.0.0@sha256:713fc2ebfd92e8217db451477182ee91944b123d2b1ee9fd5a8c6e91ca6c3a11
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8090/_wonton/capabilities"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      start_interval: 1s
+
+x-wonton:
+  spec: "0.16"
+  id: app.example.media
+  version: 0.1.0
+  kind: app
+  title: { zh: 示例媒体源, en: Example media source }
+  description:
+    zh: 把家里的照片、视频和音乐接进来，手机能备份相册、下载和播放。
+    en: Connects the photos, videos and music at home for phone backups, downloads and playback.
+  icon: icon.svg
+  author: { name: Example }
+  license: MIT
+  permissions: []
+  provides:
+    media_source:
+      service: adapter
+      port: 8090
+      operations: [upload, playback, list]
+      kinds: [photo, video, audio]
+      credentials:
+        issue: [sh, /wonton/credentials.sh, issue, "{name}"]
+        revoke: [sh, /wonton/credentials.sh, revoke, "{name}"]
+```
+
+- `service` 是 compose 里的服务，`port` 是它监听的端口；写法同“提供方”一节，服务不能在 `network_mode: none` 里。
+- `operations` 自报能做的操作：`upload`（开始上传、查偏移、续传、收尾、放弃）、`download`（带 `Range` 取字节）、`playback`（取播放计划、报进度、报停止）、`list`（分页列条目，给 Agent 找内容）。不能为空；核心仍以运行时的 `GET /_wonton/capabilities` 为准，这里给安装预检。
+- `kinds` 自报内容种类：`photo`、`video`、`audio`。不能为空；其他种类也能写，核心不认识的值原样保留。
+- `credentials` 的写法和执行方式同“提供方”一节的凭据命令，`issue`、`revoke` 两项都必填；命令默认在 `service` 的容器里执行，要换服务就写 `credentials.service`，它也必须在本插件的 `services` 里。
+- `operations` 或 `kinds` 为空、`service` 写成 compose 里没有的名字、`spec` 低于 `"0.16"`，都算清单不合法。
+
+### 媒体源：路径
+
+提供方按能力 `media_source` 实现下面这些路径；使用方是核心，核心不认具体插件。凭据由提供方签给核心，每个请求带 `X-Wonton-User`（任务或会话的主人）。
+
+| 路径 | 动作 | 语义 |
+| --- | --- | --- |
+| `GET /_wonton/capabilities` | 探测 | 返回 `operations`（`upload`/`download`/`playback`/`list`）与 `kinds`（`photo`/`video`/`audio`）；核心据它决定哪些操作可用 |
+| `GET /items?kind=&q=&album=&artist=&series=&from=&to=&cursor=` | 列条目 | 分页列这个人能看到的条目，给 Agent 找内容；按 `title` 排，`cursor` 在同一次查询的参数下稳定；回 `items` 与下一页 `cursor` |
+| `POST /uploads` | 开始上传 | 体带 `item`（相对路径、大小、校验和、拍摄时间）；返回 `upload_id` 与已收字节数（为 0 或断点位置） |
+| `HEAD /uploads/{id}` | 查断点 | 返回 `Upload-Offset`；不存在时 404，核心从头开始 |
+| `PATCH /uploads/{id}` | 续传 | 体是从 `Upload-Offset` 起的字节，`Content-Range` 校验；冲突回 409 并给当前偏移 |
+| `POST /uploads/{id}/finish` | 收尾 | 提供方校验后入库，返回 `item_id` |
+| `DELETE /uploads/{id}` | 放弃 | 幂等 |
+| `POST /playback` | 取播放计划 | 体带 `item`、`DeviceProfile`、`position_ms`、`audio?`、`subtitle?`（同 `PlaybackRequest`；切轨用同一 `item`、当前 `position_ms` 与新轨号重取）；返回 `PlaybackPlan`（直连 URL 或转码流、音轨字幕、可 seek 范围、过期时间） |
+| `POST /playback/{session}/progress` | 报进度 | 体带位置毫秒与墙钟；提供方按上游约定写（scrobble、`Sessions/Playing/Progress`） |
+| `PUT /playback/{session}/queue` | 存队列 | 体带 `entries`、`position`、`mode`；幂等，成功 204；提供方不支持的队列字段忽略 |
+| `POST /playback/{session}/stopped` | 结束 | 带最终位置与原因 |
+| `GET /items/{id}/segments` | 章节/片头片尾 | 回 `segments`（类型、起点、终点）；没有就 404。plan 里带了就以 plan 为准，起播后新抓到的以新抓的为准 |
+| `GET /items/{id}/download` | 下离线 | 支持 `Range`/`If-Range`，回 206 与 `Content-Range` |
+| `POST /revoke` | 收回 | 体只带 `name`；提供方只注销上游凭据、停掉上游会话（任务表在核心，核心自己取消任务、结束会话） |
+
+### 媒体源：错误信封
+
+失败回 `MediaFailure` 信封：
+
+```json
+{"code": "rate_limited", "message": "上游忙，稍后再试", "retry_after_secs": 30}
+```
+
+- `code` 是失败类别，取下面表格的第一列，只增不改名；认不得的码原样传回去，核心按不退避算。
+- `message` 是给人看的说明，写清发生了什么。
+- `retry_after_secs` 可选，只有 `rate_limited` 这类要等一等的码才带。
+
+| 类别 | 何时出现 | 壳怎么显示 | 退避 |
+| --- | --- | --- | --- |
+| `local_source_unavailable` | 手机上的源被删/改了 | “源文件不见了”，跳过这一项 | 不退避 |
+| `local_permission_denied` | 系统权限没给 | “去授权”，带跳转设置 | 不退避 |
+| `local_storage_full` | 手机空间不足 | “手机空间不足”，列占用与清理 | 不退避 |
+| `local_io` | 本地读写失败 | “本机出错”，带重试 | 1 次 |
+| `transport_unavailable` | 没有网、隧道断 | 进 `WaitingNetwork`，恢复后从断点续 | 1/2/4/8/16/32/60 秒，最多六次 |
+| `protocol` | 上游回了看不懂的东西 | “对不上”，带重试 | 同上 |
+| `authentication_required` | 上游凭据失效或被收回 | “需要重新登录”，带跳转入口 | 不退避 |
+| `permission_denied` | 上游拒了这个人的权限 | “没有权限” | 不退避 |
+| `unsupported_by_device` | 格式或 `DeviceProfile` 不被接受 | “这台设备放不了”，给转码按钮 | 不退避 |
+| `rate_limited` | 提供方回 429 | “限速中，N 秒后重试” | 按 `retry_after_secs`，不计入六次 |
+| `media_gone` | 文件被删或移走 | “已不在库里”，该项标 `Failed` | 不退避 |
+| `plugin_unavailable` | 插件没装/没起来 | “插件没在跑”，带重试 | 1/2/4 秒，最多三次 |
+| `upstream_error` | 上游 5xx | “服务器出错”，带重试 | 同传输 |
+| `server_storage_full` | 服务器空间不足 | “家里硬盘满了”，列占用 | 不退避 |
+| `suspended_by_system` | 平台暂停（iOS 挂起、Android 配额到） | 进 `Paused{reason}`，不报错；它只在 `Paused` 里用，不进 `Failed` | 恢复时从断点续 |
+
+退避用完标 `Failed`，不藏也不无限重试；手动重试重置计数。`device_no_response` 不是任务的失败，只在工具结果的失败体里单独带，`reasons` 列出关机、没网、被划掉、被系统限流里的全部命中项。
+
+### 媒体源：适配器进程
+
+适配器把上游接口翻成上面这套路径，可以是只跑翻译的边车容器，也可以是插件主体里的一段；`provides.media_source.service` 指向谁，核心就连谁，两种写法对核心一样。
+
+- 适配器里不放业务逻辑：只做字段映射、错误码归一、上游凭据注入。重试、断点、退避、配额、队列都在核心，适配器不存任务和会话状态。
+- 上游凭据按人从插件自己的数据卷取，按请求的 `X-Wonton-User` 找；核心只告诉“这是谁”，不存上游口令，也不把别人的凭据发给别人。
+- 按上游真实能力声明 `operations` 与 `kinds`：只做上传的相册适配器不用实现播放，只做点播的适配器也不用实现上传。
+
+### 媒体源：契约测试
+
+核心的契约测试起两个假提供方：一个只实现 `upload`，像相册；一个只实现 `playback`/`download`/`list`，像点播。两者跑同一组用例，断言核心的视图、退避次数、断点续传，以及换提供方时客户端壳不改；用例在 `crates/wonton-core/src/plugin/tests/media_source_contract/`。
+
+插件自己的适配器按同一组用例验。`plugin check` 只查清单和插件包，不跑契约测试。
 
 ## 预装插件
 

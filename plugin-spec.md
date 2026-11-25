@@ -371,11 +371,12 @@ services:
 
 ### 各版本新增的字段
 
-清单用到下面某一版新增的字段时，`spec` 至少写那一版，`plugin check` 会逐项检查。
+清单用到下面某一版新增的字段时，`spec` 至少写那一版，`plugin check` 会逐项检查。有写法从某一版起退役：退役的权限在老 `spec` 里继续收、到那一版才报错（要改写法，不是抬 `spec`），改名、删掉的字段例外（老 `spec` 里也照样报未知字段）。
 
 **0.16**
 
 - `provides.<名字>.operations`、`provides.<名字>.kinds`：提供方自报能做的操作（`upload`/`download`/`playback`/`list`）和内容种类（`photo`/`video`/`audio`）。`media_source` 必须两项都写（见“媒体源：清单声明”），清单至少写 `spec: "0.16"`。
+- 模型网关使用方从 `permissions: [models]` 改成 `wants: [models]`（见“模型网关”）：`models` 不再写在 `permissions` 里，`plugin check` 在 0.16 及以上的清单里报错。
 
 **0.15**
 
@@ -1625,7 +1626,7 @@ x-wonton:
 
   | 能力 | 接口 | 凭据 | 高权限 |
   | --- | --- | --- | --- |
-  | `models` | OpenAI 兼容 API（`provides.models.apis`），凭据按使用方隔离。使用方写 `wants: [models]`，不能写进 `requires`；注入变量见“模型网关” | 要，在 `provides.models.credentials` 里 | 否 |
+  | `models` | OpenAI 兼容 API（`provides.models.apis`），凭据按使用方隔离。使用方写 `wants: [models]`，不能写进 `requires`（自己 `provides.models` 的除外）；注入变量见“模型网关” | 要，在 `provides.models.credentials` 里 | 否 |
   | `egress_proxy` | HTTP 代理，出口设置在提供方。没有使用方声明，不能写在 `requires`/`wants` 里 | 不用 | 否（风险由 `egress.proxy` 高权限管） |
   | `matrix_rtc` | MatrixRTC 的 LiveKit 授权服务（MSC4195：`/sfu/get`、`/get_token`），见“通话授权服务”。没有使用方声明，不能写在 `requires`/`wants` 里 | 不用 | 否 |
   | `torrent_client` | qBittorrent Web API v2（`/api/v2/`） | 不用 | 否 |
@@ -1922,7 +1923,7 @@ x-wonton:
   permissions: []
 ```
 
-`models` 不能写进 `requires`，也不能写进 `optional_permissions`；网关不是安装门槛。
+`models` 不能写进 `requires`，也不能写进 `optional_permissions`；只有自己 `provides.models` 的插件才可以写进 `requires`。网关不是安装门槛。
 
 变量沿用 `WONTON_MODEL_BASE_URL`、`WONTON_MODEL_API_KEY`、`WONTON_MODEL_ANTHROPIC_BASE_URL`、
 `WONTON_MODEL_GEMINI_BASE_URL` 和 `WONTON_MODEL_DEFAULT`，路径与默认路由组的含义不变（见“安装时注入的变量”）。

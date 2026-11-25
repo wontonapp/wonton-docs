@@ -1,6 +1,6 @@
 # 插件规范 `x-wonton`（草案 v0.16）
 
-> 草案，字段可能调整。正式发布之前规范直接改：新写法按版本生效，老清单保持旧 `spec` 继续可用，插件跟着升。
+> 草案，字段可能调整。正式发布之前规范直接改，不保留旧写法：核心只认当前的写法，插件跟着升。
 
 插件在清单顶层用 `x-wonton` 扩展字段描述它在 Wonton 里的身份、运行形态、入口、能力和权限。
 容器插件的清单是 `docker-compose.yml`；compose 引用的配置文件、图标和设置表单与它放在同一个目录里，合称插件包。
@@ -371,15 +371,12 @@ services:
 
 ### 各版本新增的字段
 
-清单用到下面某一版新增的字段，或从某一版起退役的写法时，`spec` 至少写那一版，`plugin check` 会逐项检查。
-
-**0.16**
-
-- 模型网关使用方从 `permissions: [models]` 改成 `wants: [models]`（见“模型网关”）：`models` 不再写在 `permissions` 里，`plugin check` 在 0.16 及以上的清单里报错。老清单保持旧 `spec` 继续收。
+清单用到下面某一版新增的字段，或从某一版起退役的写法时，`spec` 至少写那一版，`plugin check` 会逐项检查。退役的权限在老 `spec` 里继续收；改名、删掉的字段例外（照样报未知字段）。
 
 **0.16**
 
 - `provides.<名字>.operations`、`provides.<名字>.kinds`：提供方自报能做的操作（`upload`/`download`/`playback`/`list`）和内容种类（`photo`/`video`/`audio`）。`media_source` 必须两项都写（见“媒体源：清单声明”），清单至少写 `spec: "0.16"`。
+- 模型网关使用方从 `permissions: [models]` 改成 `wants: [models]`（见“模型网关”）：`models` 不再写在 `permissions` 里，`plugin check` 在 0.16 及以上的清单里报错。
 
 **0.15**
 
@@ -1629,7 +1626,7 @@ x-wonton:
 
   | 能力 | 接口 | 凭据 | 高权限 |
   | --- | --- | --- | --- |
-  | `models` | OpenAI 兼容 API（`provides.models.apis`），凭据按使用方隔离。使用方写 `wants: [models]`，不能写进 `requires`；注入变量见“模型网关” | 要，在 `provides.models.credentials` 里 | 否 |
+  | `models` | OpenAI 兼容 API（`provides.models.apis`），凭据按使用方隔离。使用方写 `wants: [models]`，不能写进 `requires`（自己 `provides.models` 的除外）；注入变量见“模型网关” | 要，在 `provides.models.credentials` 里 | 否 |
   | `egress_proxy` | HTTP 代理，出口设置在提供方。没有使用方声明，不能写在 `requires`/`wants` 里 | 不用 | 否（风险由 `egress.proxy` 高权限管） |
   | `matrix_rtc` | MatrixRTC 的 LiveKit 授权服务（MSC4195：`/sfu/get`、`/get_token`），见“通话授权服务”。没有使用方声明，不能写在 `requires`/`wants` 里 | 不用 | 否 |
   | `torrent_client` | qBittorrent Web API v2（`/api/v2/`） | 不用 | 否 |
@@ -1926,7 +1923,7 @@ x-wonton:
   permissions: []
 ```
 
-`models` 不能写进 `requires`，也不能写进 `optional_permissions`；网关不是安装门槛。
+`models` 不能写进 `requires`，也不能写进 `optional_permissions`；只有自己 `provides.models` 的插件才可以写进 `requires`。网关不是安装门槛。
 
 变量沿用 `WONTON_MODEL_BASE_URL`、`WONTON_MODEL_API_KEY`、`WONTON_MODEL_ANTHROPIC_BASE_URL`、
 `WONTON_MODEL_GEMINI_BASE_URL` 和 `WONTON_MODEL_DEFAULT`，路径与默认路由组的含义不变（见“安装时注入的变量”）。

@@ -310,6 +310,7 @@ services:
 | `license_url` | 许可证全文的地址，HTTPS，要配 `license` 一起写。`LicenseRef-` 的许可证用它给出许可全文，App 显示许可证时打开这个地址；核心和 `--official` 不强制要求。 |
 | `tags` | 标签，插件自己写，按语言分开，如 `{ zh: [相册, AI], en: [Photos, AI] }`。每种语言最多 8 个，每个 1 到 24 个字符，不能重复。商店按出现过的标签筛选，所以写用途，不写技术词；也用来搜索。 |
 | `about` | 详细介绍：多语言，纯文本，空行分段，每种语言不超过 4000 个字符。没写时详情页只显示 `description`。 |
+| `setup` | 第一次打开要做什么：多语言，纯文本，每种语言不超过 400 个字符。安装前的详情页也显示，确认页最上面就显示，装好后留在详情页。写登录、改初始密码这类只有用户自己能做的一步，没有时为空。 |
 | `release_notes` | 这个版本的更新说明：多语言，纯文本，每种语言不超过 2000 个字符，升级提示里显示。数据迁移不可逆时要写明。 |
 | `setup` | 装好后要用户自己做的一步：多语言，纯文本，每种语言不超过 400 个字符。安装和更新的确认页排在最前面、醒目显示，详情页也有。写一句人话和一条能照抄的命令，不要写成长篇说明（见下节）。 |
 
@@ -375,6 +376,10 @@ services:
 **0.16**
 
 - 模型网关使用方从 `permissions: [models]` 改成 `wants: [models]`（见“模型网关”）：`models` 不再写在 `permissions` 里，`plugin check` 在 0.16 及以上的清单里报错。老清单保持旧 `spec` 继续收。
+
+**0.16**
+
+- `provides.<名字>.operations`、`provides.<名字>.kinds`：提供方自报能做的操作（`upload`/`download`/`playback`/`list`）和内容种类（`photo`/`video`/`audio`）。`media_source` 必须两项都写（见“媒体源：清单声明”），清单至少写 `spec: "0.16"`。
 
 **0.15**
 
@@ -468,6 +473,8 @@ x-wonton:
 - 一句话说清「把什么、加到哪里」，再给一条能照抄的命令；参数放不下的细节写进 `about`。
 - 只有确实需要才写。安装和更新的确认页把它排在提示的第一条、和权限一样醒目；详情页也一直显示。
 - 写 `setup` 的清单 `spec` 至少写 `"0.11"`。
+
+`setup` 写装好后用户自己做的那一步，比如在哪里登录、默认账号是什么、第一次登录后改密码。按顺序写一两句，不重复 `about`；能由设置表单（`settings`）代劳的写进表单。
 
 ### 图标和截图
 
@@ -575,6 +582,24 @@ Minimal app icon, flat vector. Solid plain light grey background #F4F4F4 filling
 
 声明 `oidc` 或 `proxy` 要同时满足：应用官方支持这种接法；接上后打开网页不会再看到应用的登录页，角色也对；不用脚本
 往应用里预建账号，不用改应用的数据，不用每次启动核对。做不到就用 `none`。
+
+### 网页里的说话人（`X-Wonton-Web-User`）
+
+网页里的应用替人跟 Bot 说话时（对话类控制台），网关告诉应用这一页是谁打开的：
+
+- 转发给插件网页的每个请求都带 `X-Wonton-Web-User`，值是打开者的 Matrix 用户 ID（如 `@mom:home.example`）。
+  客户端自己带同名头的一律先剥掉再写网关的值。插件只读这个头、不验签：插件端口曝到宿主时，直连那条路能自己塞；
+  在升级那一刻读一次、记在这条连接上，是插件自己的用法，不是网关的边界。
+- 判成“这个人”的依据和网页入口的访问权限同源：登录的会话，或认出来的设备属于谁（App 里经隧道打开的页面，
+  包括 App 内置的终端页签）；好友经分享连接打开共享的插件页也写，值是好友自己的 ID，按分享授权判、不看 `open_apps`。
+- 没有头的情形：插件自己网络里的容器直转（走上游自己的内部凭据 `x-hermes-auth`，不经网关）、没登录、没授权（403，
+  这两个请求根本到不了应用）、OIDC 回调。这些请求没有可说的打开者；回调里应用自己换凭据，用不到它。
+- 没有头时插件必须照常可用：控制台仍可读，只是发言回落成主机主人或只读。头在、值却当不成 Matrix 用户 ID 时
+  由应用这一侧拒掉并说明（上游要求的形状），网关不校验值的形状。
+- 网页这样发起的一轮没有房间：报轮次时 `room` 写空串，字段不能省（缺字段是 400 `invalid_input`），`origin` 的工具元数据
+  也不带房间。房间只对 IM 来的那一轮有意义。
+- 同一会话开着多个页面时，按最后提交的那条连接认人：关了还有别的页面开着就改由剩下的最后一条；最后一个关了
+  而会话还在时记录留着，到会话结束才删。
 
 ### 每个 Bot 的网页
 
@@ -1414,7 +1439,7 @@ JSON 对象做 base64）。连接器不读清单，装、改、卸都不用重�
 | `devices.gpu` | 高 | 使用显卡，见“显卡”。 |
 | `devices.serial` | 高 | 使用用户安装时选的一个串口设备，见“设备”。可以声明成可选、默认关。 |
 | `devices.usb` | 高 | 访问这台主机上所有 USB 设备，见“设备”。可以声明成可选、默认关。 |
-| `devices.disk` | 很高 | 读写用户勾选的整块硬盘，见“设备”。 |
+| `devices.disk` | 很高或最高 | 读写用户勾选的整块硬盘；选中 NVMe 时为最高风险，见“设备”。 |
 | `devices.<路径>` | 高 | 访问宿主设备，路径只能是 `/dev/net/tun` 或 `/dev/fuse`，如 `devices./dev/net/tun`。 |
 | `network.host` | 很高 | 使用宿主网络：能访问本机所有端口，开的端口直接开在本机的网卡上，开在哪些网卡上由应用决定。 |
 | `cap.<能力>` | 很高或最高 | 给服务增加 Linux capability，如 `cap.NET_ADMIN`。`NET_ADMIN`、`NET_RAW`、`NET_BIND_SERVICE`、`SYS_TIME`、`SYS_NICE`、`IPC_LOCK` 是很高，其余都是最高。 |
@@ -1609,6 +1634,7 @@ x-wonton:
   | `matrix_rtc` | MatrixRTC 的 LiveKit 授权服务（MSC4195：`/sfu/get`、`/get_token`），见“通话授权服务”。没有使用方声明，不能写在 `requires`/`wants` 里 | 不用 | 否 |
   | `torrent_client` | qBittorrent Web API v2（`/api/v2/`） | 不用 | 否 |
   | `jellyfin` | Jellyfin 的 HTTP API | 要，在 `provides.jellyfin.credentials` 里 | 否 |
+  | `media_source` | 媒体源：HTTP。`GET /_wonton/capabilities` 自报 `operations` 与 `kinds`，条目、上传、播放计划各走 `/items`、`/uploads`、`/playback`；每个请求带 `X-Wonton-User`（任务或会话的主人），失败回 `MediaFailure` 信封，见“媒体源：路径”和“媒体源：错误信封” | 要，在 `provides.media_source.credentials` 里 | 否 |
   | `static_web` | 托管：HTTP 静态文件（RFC 9110 的 `GET`/`HEAD`、条件请求、`Range`），站点根是挂载点下的 `<X-Wonton-Plugin>/`。`runtime: static_web` 的插件隐含 `requires` 它，不用再写 | 不用 | 否 |
   | `web_storage` | 托管：WebDAV（RFC 4918）整文件读写的子集，见“静态网页的数据” | 不用 | 否 |
   | `personal_data` | 位置和健康数据的存取：`POST /location`、`POST /health`、`GET /query`、`DELETE /data`、`GET /export`、`POST /cleanup`；每个请求带 `X-Wonton-User`（数据属于谁），类型名和 JSON 形状见 wontonapp/wonton 的 `wonton-protocol` 库里 `personal_data` 的文档和常量 | 要，在 `provides.personal_data.credentials` 里 | 否 |
@@ -1743,6 +1769,120 @@ x-wonton:
       volumes:
         - ${WONTON_MATRIX_CA_DIR}:/etc/wonton-ca:ro
   ```
+
+### 媒体源：清单声明
+
+核心是使用方，插件当提供方，把家里的媒体库接进来。核心不认 Immich、Jellyfin 这类名字，换一个源只换插件。这项能力和 `jellyfin` 并存：`jellyfin` 给 Seerr 这类窄用途，`media_source` 管播放与传输，同一个插件可以两样都提供，Seerr 不用迁。
+
+在 `provides` 下按能力名声明 `media_source`，写清它监听的服务、能做的操作和内容种类（代码里的字段叫 `provides.capabilities`，清单里不写这一层）：
+
+```yaml
+services:
+  adapter:
+    image: ghcr.io/example/media-source:1.0.0@sha256:713fc2ebfd92e8217db451477182ee91944b123d2b1ee9fd5a8c6e91ca6c3a11
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8090/_wonton/capabilities"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      start_interval: 1s
+
+x-wonton:
+  spec: "0.16"
+  id: app.example.media
+  version: 0.1.0
+  kind: app
+  title: { zh: 示例媒体源, en: Example media source }
+  description:
+    zh: 把家里的照片、视频和音乐接进来，手机能备份相册、下载和播放。
+    en: Connects the photos, videos and music at home for phone backups, downloads and playback.
+  icon: icon.svg
+  author: { name: Example }
+  license: MIT
+  permissions: []
+  provides:
+    media_source:
+      service: adapter
+      port: 8090
+      operations: [upload, playback, list]
+      kinds: [photo, video, audio]
+      credentials:
+        issue: [sh, /wonton/credentials.sh, issue, "{name}"]
+        revoke: [sh, /wonton/credentials.sh, revoke, "{name}"]
+```
+
+- `service` 是 compose 里的服务，`port` 是它监听的端口；写法同“提供方”一节，服务不能在 `network_mode: none` 里。
+- `operations` 自报能做的操作：`upload`（开始上传、查偏移、续传、收尾、放弃）、`download`（带 `Range` 取字节）、`playback`（取播放计划、报进度、报停止）、`list`（分页列条目，给 Agent 找内容）。不能为空；核心仍以运行时的 `GET /_wonton/capabilities` 为准，这里给安装预检。
+- `kinds` 自报内容种类：`photo`、`video`、`audio`。不能为空；其他种类也能写，核心不认识的值原样保留。
+- `credentials` 的写法和执行方式同“提供方”一节的凭据命令，`issue`、`revoke` 两项都必填；命令默认在 `service` 的容器里执行，要换服务就写 `credentials.service`，它也必须在本插件的 `services` 里。
+- `operations` 或 `kinds` 为空、`service` 写成 compose 里没有的名字、`spec` 低于 `"0.16"`，都算清单不合法。
+
+### 媒体源：路径
+
+提供方按能力 `media_source` 实现下面这些路径；使用方是核心，核心不认具体插件。凭据由提供方签给核心，每个请求带 `X-Wonton-User`（任务或会话的主人）。
+
+| 路径 | 动作 | 语义 |
+| --- | --- | --- |
+| `GET /_wonton/capabilities` | 探测 | 返回 `operations`（`upload`/`download`/`playback`/`list`）与 `kinds`（`photo`/`video`/`audio`）；核心据它决定哪些操作可用 |
+| `GET /items?kind=&q=&album=&artist=&series=&from=&to=&cursor=` | 列条目 | 分页列这个人能看到的条目，给 Agent 找内容；按 `title` 排，`cursor` 在同一次查询的参数下稳定；回 `items` 与下一页 `cursor` |
+| `POST /uploads` | 开始上传 | 体带 `item`（相对路径、大小、校验和、拍摄时间）；返回 `upload_id` 与已收字节数（为 0 或断点位置） |
+| `HEAD /uploads/{id}` | 查断点 | 返回 `Upload-Offset`；不存在时 404，核心从头开始 |
+| `PATCH /uploads/{id}` | 续传 | 体是从 `Upload-Offset` 起的字节，`Content-Range` 校验；冲突回 409 并给当前偏移 |
+| `POST /uploads/{id}/finish` | 收尾 | 提供方校验后入库，返回 `item_id` |
+| `DELETE /uploads/{id}` | 放弃 | 幂等 |
+| `POST /playback` | 取播放计划 | 体带 `item`、`DeviceProfile`、`position_ms`、`audio?`、`subtitle?`（同 `PlaybackRequest`；切轨用同一 `item`、当前 `position_ms` 与新轨号重取）；返回 `PlaybackPlan`（直连 URL 或转码流、音轨字幕、可 seek 范围、过期时间） |
+| `POST /playback/{session}/progress` | 报进度 | 体带位置毫秒与墙钟；提供方按上游约定写（scrobble、`Sessions/Playing/Progress`） |
+| `PUT /playback/{session}/queue` | 存队列 | 体带 `entries`、`position`、`mode`；幂等，成功 204；提供方不支持的队列字段忽略 |
+| `POST /playback/{session}/stopped` | 结束 | 带最终位置与原因 |
+| `GET /items/{id}/segments` | 章节/片头片尾 | 回 `segments`（类型、起点、终点）；没有就 404。plan 里带了就以 plan 为准，起播后新抓到的以新抓的为准 |
+| `GET /items/{id}/download` | 下离线 | 支持 `Range`/`If-Range`，回 206 与 `Content-Range` |
+| `POST /revoke` | 收回 | 体只带 `name`；提供方只注销上游凭据、停掉上游会话（任务表在核心，核心自己取消任务、结束会话） |
+
+### 媒体源：错误信封
+
+失败回 `MediaFailure` 信封：
+
+```json
+{"code": "rate_limited", "message": "上游忙，稍后再试", "retry_after_secs": 30}
+```
+
+- `code` 是失败类别，取下面表格的第一列，只增不改名；认不得的码原样传回去，核心按不退避算。
+- `message` 是给人看的说明，写清发生了什么。
+- `retry_after_secs` 可选，只有 `rate_limited` 这类要等一等的码才带。
+
+| 类别 | 何时出现 | 壳怎么显示 | 退避 |
+| --- | --- | --- | --- |
+| `local_source_unavailable` | 手机上的源被删/改了 | “源文件不见了”，跳过这一项 | 不退避 |
+| `local_permission_denied` | 系统权限没给 | “去授权”，带跳转设置 | 不退避 |
+| `local_storage_full` | 手机空间不足 | “手机空间不足”，列占用与清理 | 不退避 |
+| `local_io` | 本地读写失败 | “本机出错”，带重试 | 1 次 |
+| `transport_unavailable` | 没有网、隧道断 | 进 `WaitingNetwork`，恢复后从断点续 | 1/2/4/8/16/32/60 秒，最多六次 |
+| `protocol` | 上游回了看不懂的东西 | “对不上”，带重试 | 同上 |
+| `authentication_required` | 上游凭据失效或被收回 | “需要重新登录”，带跳转入口 | 不退避 |
+| `permission_denied` | 上游拒了这个人的权限 | “没有权限” | 不退避 |
+| `unsupported_by_device` | 格式或 `DeviceProfile` 不被接受 | “这台设备放不了”，给转码按钮 | 不退避 |
+| `rate_limited` | 提供方回 429 | “限速中，N 秒后重试” | 按 `retry_after_secs`，不计入六次 |
+| `media_gone` | 文件被删或移走 | “已不在库里”，该项标 `Failed` | 不退避 |
+| `plugin_unavailable` | 插件没装/没起来 | “插件没在跑”，带重试 | 1/2/4 秒，最多三次 |
+| `upstream_error` | 上游 5xx | “服务器出错”，带重试 | 同传输 |
+| `server_storage_full` | 服务器空间不足 | “家里硬盘满了”，列占用 | 不退避 |
+| `suspended_by_system` | 平台暂停（iOS 挂起、Android 配额到） | 进 `Paused{reason}`，不报错；它只在 `Paused` 里用，不进 `Failed` | 恢复时从断点续 |
+
+退避用完标 `Failed`，不藏也不无限重试；手动重试重置计数。`device_no_response` 不是任务的失败，只在工具结果的失败体里单独带，`reasons` 列出关机、没网、被划掉、被系统限流里的全部命中项。
+
+### 媒体源：适配器进程
+
+适配器把上游接口翻成上面这套路径，可以是只跑翻译的边车容器，也可以是插件主体里的一段；`provides.media_source.service` 指向谁，核心就连谁，两种写法对核心一样。
+
+- 适配器里不放业务逻辑：只做字段映射、错误码归一、上游凭据注入。重试、断点、退避、配额、队列都在核心，适配器不存任务和会话状态。
+- 上游凭据按人从插件自己的数据卷取，按请求的 `X-Wonton-User` 找；核心只告诉“这是谁”，不存上游口令，也不把别人的凭据发给别人。
+- 按上游真实能力声明 `operations` 与 `kinds`：只做上传的相册适配器不用实现播放，只做点播的适配器也不用实现上传。
+
+### 媒体源：契约测试
+
+核心的契约测试起两个假提供方：一个只实现 `upload`，像相册；一个只实现 `playback`/`download`/`list`，像点播。两者跑同一组用例，断言核心的视图、退避次数、断点续传，以及换提供方时客户端壳不改；用例在 `crates/wonton-core/src/plugin/tests/media_source_contract/`。
+
+插件自己的适配器按同一组用例验。`plugin check` 只查清单和插件包，不跑契约测试。
 
 ## 预装插件
 
@@ -1969,13 +2109,18 @@ Bot 是一个 Matrix 身份加上驱动它的插件。核心没有接入 Matrix 
 3. 按 `bot` 设置显示名（取中文，没有时取英文；没写 `bot.display_name` 时用 `title`）和静态头像（png、jpg、gif 或
    webp）。只在新建账号时设置：沿用的账号（不删数据重装、升级、安装失败后重试）不重设，用户或 Agent 后来改过的
    名字和头像不会被冲掉。见下面的“名字和头像”。
-4. 准备 Bot 的主房间：Bot 建一个加密房间（`trusted_private_chat`，用户和 Bot 都是管理员），先不邀请用户。没有主房间
-   时 Hermes 会在每个新会话的第一条回复里插一段设置提示。
+4. 准备 Bot 的主房间：核心用 JWT 临时登录用户的一台设备（用户的账号在第一次登录时才建，所以先登录），由用户建一个
+   加密房间（`trusted_private_chat`，房间版本 12，用户和 Bot 都写成建房的人 `additional_creators`，各是管理员），
+   用户邀请 Bot、Bot 进来，然后用户退出房间（房间从用户的聊天列表里消失），再退出登录。邀请的人必须是主人：插件按
+   注入的允许名单（主人和联系人，名单里没有 Bot）收邀请，Bot 自己邀请自己会被当成陌生人丢掉。邀请、Bot 进来、
+   用户退出在同一个流程里：建房之后哪一步失败、`createRoom` 的响应丢掉，用户也跟着退出。清理尽力而为，扫描或
+   退出失败时照样报原来的错误、房间留在用户的列表里，用户看得见、删得掉。没有主房间时 Hermes
+   会在每个新会话的第一条回复里插一段设置提示。
 5. 注入 `WONTON_MATRIX_*` 变量。
-6. 插件装好、健康检查都通过后，把主房间交给用户：核心用 JWT 临时登录用户的一台设备（用户的账号在第一次登录时才建，
-   所以先登录再邀请），Bot 邀请用户，用户加入，双方的 `m.direct` 都记着它，然后退出登录。私聊这时才出现在用户的
-   聊天列表里：早交出去的话，用户在 Bot 启动前发的话它收不到。装不上时用户那边不留私聊；交出之后才失败的（如写
-   安装记录失败），回滚时用户和 Bot 都退出这个房间。
+6. 插件装好、健康检查都通过后，把主房间交给用户：核心再临时登录用户的一台设备，把用户请回房间、把房间写进用户
+   和 Bot 双方的 `m.direct`，然后退出登录。私聊这时才出现在用户的聊天列表里：早交出去的话，用户在 Bot 启动前发的话
+   它收不到。装不上时用户已经退出房间、也没写进 `m.direct`，清理失败时房间留在用户的列表里；
+   交出之后才失败的（如写安装记录失败），回滚时把用户请出去、从双方的 `m.direct` 去掉。
 
 - `WONTON_MATRIX_HOMESERVER` 是 `http://matrix.wonton.internal:<网关端口>`，核心在声明了 `matrix.bot` 的插件网络里的
   别名。网关按连接的来源地址认出请求来自哪个插件网络（不算网桥自己的地址，那是宿主那一侧），只转发声明了
@@ -1986,8 +2131,10 @@ Bot 是一个 Matrix 身份加上驱动它的插件。核心没有接入 Matrix 
 - 账号留着，数据也留着：安装失败回滚时，这次新建的应用数据目录、命名卷和插件密钥都不删，重试接着用，和不删数据卸载
   一样。插件首次启动时给 Bot 建的加密身份（交叉签名、密钥备份）在服务器上删不掉，Bot 又没有密码、换不掉它，私钥要是
   跟着数据删了，同一个账号以后就再也解不开。删除数据卸载才从头来：账号停用，再装是新账号。
-- 插件的容器启动时，第一次安装的用户还不在主房间里。要往主房间里发消息的插件，等用户加入（`m.room.member` 事件）
-  之后再发：之前发的消息，房间密钥没有发给用户的设备，用户解不开。
+- 往主房间里发消息的插件，等房间在 Bot 的 `m.direct` 里（交出去了）之后再发：之前发的消息，房间密钥没有发给用户的
+  设备，用户解不开。用户这时也不在房间里。
+- 用户和 Bot 都是建房的人、都是管理员，Bot 踢不动用户（核心收到 403），App 也没有“移出成员”的入口：用户想结束
+  这段私聊，只能自己退出房间。
 - 令牌对应一台设备，核心不主动轮换。吊销设备、删掉 Bot 时令牌立即失效。核心重启时核对 Bot 的
   设备还在，被吊销了就把插件标为异常，重装（可以不删数据）重新签发；Bot 换了一台设备，要重新建加密身份。
 - 重建容器时沿用设备和令牌（升级；第一次配上或取消出网代理）。核心不单独保存令牌，它只在 Docker 的容器配置里，所以从旧容器读回：
@@ -3160,7 +3307,11 @@ x-wonton:
 - 串口用 `/dev/serial/by-id` 的路径交给 Docker，编号变了也能找回同一个设备；容器加入设备节点所属的组，非 root 进程才开得了
   它。用户给每个位置选一个设备，一个服务拿不到旁边的别的串口。
 - 硬盘整盘只读交给服务（`--device` 加 `:r`）：读 SMART 只需要打开节点。核心随 `devices.disk` 给 `SYS_RAWIO`，插件不用也不
-  能为此另写 `cap.SYS_RAWIO`。勾了 NVMe 盘时还交给控制器 `/dev/nvmeN`。
+  能为此另写 `cap.SYS_RAWIO`。勾了 NVMe 盘时还交给控制器 `/dev/nvmeN`；内核的 NVMe 管理命令读 SMART 需要 `SYS_ADMIN`，
+  核心只给拿到所选磁盘的服务附带这项能力，不用在清单里另写权限或字段。安装和改授权时选中 NVMe 按最高风险提示并再确认一次；
+  只选 SATA/SAS 时仍为很高风险。旧安装记录里选过 NVMe 不代表同意了 `SYS_ADMIN`：升级或重建不能仅凭旧选择新增这项能力；
+  要新增时必须重新完成最高风险确认。确认后的设备与服务授权会在重建时保留；管理员代批准同样需要两次确认。
+  设备选择绑定硬盘类型：确认后同一 by-id 改指不同类型的盘时安装或升级失败，用户须重新预览。
 - 硬盘按勾选顺序起名，插件不要依赖宿主上的盘名。预览里各项的 `target` 只按列表顺序示意，以装好后的实际路径为准。
 - 可选硬盘只列物理整盘和 NVMe 命名空间，不把分区、逻辑卷或循环文件当成 SMART 硬盘。系统盘经逻辑卷或叠加层时可能无法映射，预览如实提示认不出，不自动勾选。
 - 用户装着系统的盘（宿主根目录或 Wonton 数据目录所在的）也列出来、标“系统盘”，默认不勾。认不出时一块都不标。

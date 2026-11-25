@@ -1554,7 +1554,7 @@ x-wonton:
 | `WONTON_SETTING_<名字>` | 清单声明了这一项，服务引用了它 | 设置，名字转成大写，如 `WONTON_SETTING_BUDGET`。值的写法见“插件设置”。 |
 | `WONTON_BOT_NAME`、`WONTON_BOT_DATA` | `bots.services` 里的服务 | Bot 名和这个 Bot 的数据目录（宿主路径）。 |
 | `WONTON_BOT_AI_LEVEL` | `matrix.bot` 或 `bots.services` 里的服务 | 这个 Bot 能让 AI 动手到哪一级：`read_only`（只给只读的工具）、`admin_approves_deletes`（改的自己确认，删的要管理员批）、`self_confirms`（都自己确认）。私人 Bot 按归属人的角色，共享 Bot 取能用它的人里最低的一级。归属人的级别是 `read_only` 时，这个私人 Bot 的共享文件夹挂载一律只读，声明了写权限也一样。Agent 插件凭它选自带工具的模式：不是 `self_confirms` 时用最严的那档；不认识的值按 `read_only`。 |
-| `WONTON_GPU_VENDOR` | 给了显卡 | 选中那家的显卡的厂商：`amd`、`nvidia`、`intel`。核心把它直接写进拿到显卡的服务的环境，容器里能直接读，也能用于 compose 插值；不给显卡时不存在（不是空串）。 |
+| `WONTON_GPU_VENDOR` | 给了显卡 | 选中那家的显卡的厂商：`amd`、`nvidia`、`intel`。0.16 起核心把它直接写进拿到显卡的服务的环境，容器里能直接读，也能用于 compose 插值；0.15 及更早的核心只做插值，要让它在容器里也拿得到，得在 `environment` 里写 `WONTON_GPU_VENDOR: ${WONTON_GPU_VENDOR}`，靠核心直接写、省掉这行的清单 `spec` 至少写 `"0.16"`。不给显卡时不存在（不是空串）。 |
 | `WONTON_PERMISSION_DOCKER_SOCKET`、`_DEVICES_GPU`、`_DEVICES_SERIAL`、`_DEVICES_USB` | 对应的可选权限开着 | 值是 `1`。关着时不定义（不是空串），用 `${VAR:+x}` 或 `[ -n "$VAR" ]` 判断。给这个插件的所有服务，不只拿到字段的那个。 |
 | `WONTON_LAN_ADDRESSES` | `network.lan` | 局域网端口开在哪些地址上，逗号分隔，如 `192.0.2.10`。地址变化时的重建规则见“局域网”。 |
 | `WONTON_EXTERNAL_URL` | `clients.http`，或 `webui.guests: true` | 这个 App 对外的规范 origin，不带路径和末尾 `/`：公网入口开着时是公网地址，否则是局域网入口的地址，都没开时和 `WONTON_APP_URL` 相同。往外部服务登记回调地址、只认一个地址的应用用它，见“第三方 App 入口”。 |
@@ -3262,6 +3262,9 @@ x-wonton:
 - 核心给拿到显卡的服务注入 `WONTON_GPU_VENDOR`（`amd`、`nvidia`、`intel`），给了显卡才有，见“安装时注入的变量”。它
   同时进 compose 插值和这个服务的环境：各家的命令行参数或环境变量不同时，用 `${WONTON_GPU_VENDOR}` 插值，启动命令里也能
   直接读 `$WONTON_GPU_VENDOR`，不用为每家各写一份 `environment`。
+- 直接写进环境从 0.16 起才有，0.15 及更早的核心只把它当插值变量。插件要在 `environment` 里写
+  `WONTON_GPU_VENDOR: ${WONTON_GPU_VENDOR}`，老核心上容器里才有这个值；靠核心直接写、省掉这行的清单 `spec` 至少写
+  `"0.16"`（老核心对更新的 `spec` 报“先升级核心”，不会装上去拿空值）。留着占位的照旧写自己用到的版本。
 - 厂商版镜像常比通用镜像支持的架构少（只有 `amd64`）。核心在预览时读镜像的平台列表，不支持本机架构时这家算不能用，接着看
   下一家，都不行就按上面两条处理。`requirements.arch` 仍管整个插件，只对通用镜像。
 - 厂商版镜像和通用镜像一样要按摘要固定，官方索引收录每一个厂商版镜像之前都要先在那种显卡的真实主机上实测通过。

@@ -3461,7 +3461,6 @@ x-wonton:
     }
   ],
   "onboarding": {
-    "agents": ["com.nousresearch.hermes"],
     "needs": [
       {
         "id": "photos",
@@ -3484,7 +3483,7 @@ x-wonton:
 - 一个插件一项，`source` 和插件 ID 都不重复，商店按这里的顺序列出官方插件，标为“已审核”。`files` 是插件包的全部文件，`compose` 必须
   和 `files` 里的 `docker-compose.yml` 一致。核心按 `files` 核对取到的每个文件，所以文件可以从任何地方取（GitHub、
   jsDelivr）。
-- `onboarding` 是 App 的新用户引导用的清单，三个键都要有。`agents` 是可选的 Agent，按顺序列出，不在这份索引里或者不是 `kind: agent` 的跳过；`needs` 是用户能选的需求和对应的插件，不在这份索引里的插件跳过；`prompts` 是第一次聊天时给用户点的问题。这个键读不懂只影响引导，不影响商店。
+- `onboarding` 是 App 的新用户引导用的清单，`needs`、`prompts` 两个键都要有，核心只读这两个。`needs` 是用户能选的需求和对应的插件，不在这份索引里的插件跳过；`prompts` 是第一次聊天时给用户点的问题。索引里可以还留着 `agents`（可选的 Agent），核心不读，默认 Agent 插件由默认安装决定。这个键读不懂只影响引导，不影响商店。
 - `docs` 是帮助文档的版本。`source` 不带版本，`files` 最多 500 个文件。核心按 `commit` 取 `files` 列出的文件，全部核对通过后才换用。`min_core` 比这台核心新时不换，继续用手头的。这个键读不懂只影响帮助文档。
 - 条目用 `wonton-core plugin index-entry <插件包目录> github:<owner>/<repo>[/<子目录>] <提交号>` 生成，不手写：目录是那个
   提交的检出（带子目录时是那个子目录的检出；核心不连 Git，不核对），条目的 JSON 写到标准输出；加 `--index <索引目录>`

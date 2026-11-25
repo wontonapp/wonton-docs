@@ -1408,7 +1408,7 @@ JSON 对象做 base64）。连接器不读清单，装、改、卸都不用重�
 
 | 接口 | 用途 |
 | --- | --- |
-| `GET /_wonton/probe` | 试连远端：通回 204，连不上回 502 `remote_unavailable`，远端出错回 502 `remote_error` |
+| `POST /_wonton/probe` | 试连远端：JSON 请求体为 `url`（展开后的地址）、`auth`、`headers`（展开后的请求头对象）；回 200 JSON（`auth` 为 `oauth` 时这一版回 501），含 `outcome`（`ok`、`legacy_sse`、`secret_rejected`、`needs_oauth`、`needs_header_secret`、`not_mcp`、`remote_error`、`invalid`，连不上的 `unreachable`、`proxy_unavailable`、`blocked_address`、`invalid_input`）、可选 `http_status`、不含密钥的 `detail`、可选工具名 `tools`；`ok` 继续安装，其余分类拒装并报告原因 |
 | `POST /_wonton/oauth/start` | 开始授权，回授权页地址 |
 | `POST /_wonton/oauth/finish` | 交回授权码，换令牌 |
 | `DELETE /_wonton/plugins/{id}` | 卸载时撤掉这个插件的连接和令牌 |

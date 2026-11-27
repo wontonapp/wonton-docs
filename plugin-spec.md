@@ -521,7 +521,7 @@ x-wonton:
 | 范围 | 主体放在中间 112 到 400 的范围里，约占画面 55% |
 | 内容 | 一个主体，笔画尽量少，不放文字和字母 |
 
-色块从下面八种里选一种。图标是固定的图片，颜色不随用户在 App 里选的重点色变化。
+色块从下面八种里选一种。图标是固定的图片，颜色不随 App 的明暗变化。
 
 | 粉 | 橙 | 黄 | 绿 | 青 | 蓝 | 紫 | 灰 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -1138,7 +1138,7 @@ x-wonton:
 
 ### 主题
 
-App 在文档开始前把下面的 CSS 变量写到根元素，同时设置 `color-scheme`。明暗和重点色变了不重新加载，变量当场更新。
+App 在文档开始前把下面的 CSS 变量写到根元素，同时设置 `color-scheme`。明暗变了不重新加载，变量当场更新。
 
 | 变量 | 是什么 |
 | --- | --- |
@@ -1148,7 +1148,7 @@ App 在文档开始前把下面的 CSS 变量写到根元素，同时设置 `col
 | `--color-text-danger`、`--color-text-success`、`--color-text-warning`，`background`、`border`、`ring` 同理 | 状态色 |
 | `--font-sans` | 系统字体 |
 | `--border-radius-xs`、`--border-radius-md`、`--border-radius-lg`、`--border-radius-full` | 圆角 |
-| `--wonton-accent-fill`、`--wonton-accent-ink`、`--wonton-accent-ink-on-fill` | 重点色的底色、文字和图标、放在重点色上的文字 |
+| `--wonton-accent-fill`、`--wonton-accent-ink`、`--wonton-accent-ink-on-fill` | 强调色：按钮这类强调的底色、页面上要强调的文字和图标、放在强调底色上的文字。App 的界面是黑白的：浅色时前两个是黑、第三个是白，深色时反过来，所以强调底色上的字要用 `ink-on-fill`，不能用 `ink` |
 | `--wonton-inset-top`、`--wonton-inset-bottom` | 页面顶上、底下要自己让出的高度，见“整页显示”；App 已经替页面让开的边是 0 |
 | `--wonton-inset-left`、`--wonton-inset-right` | 左右安全区，横屏时躲刘海和圆角 |
 
@@ -1173,7 +1173,7 @@ body {
 | 方法 | 说明 |
 | --- | --- |
 | `ui/initialize`、`ui/notifications/initialized` | 握手。`hostCapabilities` 是 `openLinks` 和 `message.text`。`hostContext` 有 `theme`、`styles`、`locale`（App 在用的语言，如 `zh-Hant`；页面自己的 `navigator.language` 是用户要的语言）、`timeZone`、`platform: mobile`、`safeAreaInsets`。App 收到握手或页面加载完就撤掉骨架屏，先到先算 |
-| `ui/notifications/host-context-changed` | 明暗、重点色、字号变了 |
+| `ui/notifications/host-context-changed` | 明暗、字号变了 |
 | `ui/open-link` | 系统浏览器打开，只收 `https` |
 | `ui/message` | `role: user`，`content` 只收文字块。切到聊天，把文字放进输入框，用户点发送才发 |
 

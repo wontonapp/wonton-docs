@@ -127,8 +127,9 @@ x-wonton:
 | `mcp` | 否 | 给 Agent 的工具入口：`service`、`port`、`path`（默认 `/mcp`）、`transport`（`streamable-http`），可选 `headers`（见“提供工具”）、`tool_idle_seconds`、`tool_total_seconds`、`tools`（只提供列出的工具），见“工具与 MCP 总线”。 |
 | `bot` | 否 | Bot 的显示名（`display_name`，多语言）、静态头像（`avatar`）和状态头像（`avatars`：`idle`、`working`、`waiting`、`offline` 四个状态各一个文件），都是插件包里的文件；聊天页的默认显示方式（`chat_layout`，见“聊天页的显示方式”）。只能和 `matrix.bot` 权限一起声明，见“Matrix Bot”。 |
 | `bots` | 否 | 一个插件多个 Bot：`services` 列出每个 Bot 一份的服务（见“一个插件多个 Bot”）。 |
-| `agent` | `kind=agent` 时必填 | `protocol`：`matrix`（Agent 自己登录 Matrix，须声明 `matrix.bot`）或 `acp`（经 ACP 桥接入）。可选 `login`，见“Agent 插件”。 |
+| `agent` | `kind=agent` 时必填 | `protocol`：`matrix`（Agent 自己登录 Matrix，须声明 `matrix.bot`）或 `acp`（经 ACP 桥接入）。可选 `login`、`models`，见“Agent 插件”。 |
 | `agent.skills.mount` | 否 | 仅 `kind: agent` 允许。容器内的绝对路径，不能是 `/`，不能含 `..` 路径段，不能是 `/proc`、`/sys`、`/dev` 或它们的子路径。填写 Agent 原生会读取、但自己不会往里写的技能目录。 |
+| `agent.models` | 否 | 仅 `kind: agent` 允许。`service`（在哪个服务里执行，写了 `bots` 的插件须在 `bots.services` 里）和 `command`（argv）。见“模型接入”。 |
 | `provides` | 否 | 向其他插件提供的能力：`models`（见“模型网关”，宜为官方插件）、`egress_proxy`（见“网络”的“代理插件”），`agent_acp`（见“Agent 插件”）以及其他能力，键是能力名，见“能力依赖”。托管能力（`static_web`、`web_storage`）还要写 `mount`，见“提供方”。 |
 | `requires`、`wants` | 否 | 依赖的能力名列表：`requires` 的能力没有提供方装不上，`wants` 有提供方就用、没有照装。提供方可以声明自己提供的同一能力；核心选提供方时排除自身。见“能力依赖”。 |
 | `gpu` | 否 | 拿到显卡的服务（`services`），以及按显卡厂商换的镜像（`images`）。要和 `devices.gpu` 权限一起声明，见“显卡”。 |
@@ -2903,6 +2904,7 @@ x-wonton:
     `login_finish`，插件换凭据。服务商不接受这种回跳地址时不要声明它。授权网址必须带一个每次登录新生成、猜不到的 `state`
     （OAuth 的做法）：App 只把 `state` 一致的回跳交回来，插件在 `login_finish` 里还要自己再比一次，对不上、会话已经用过或过期
     都回 `failed`，不换凭据；一个会话只能 `login_finish` 成功一次；
+  以后可能加别的 `type`：App 跳过不认识的那一种，一家的接法全都不认识时才不列这家，整份目录照常用；
 - `connected`：填了 key 或登录了（不代表 key 有效）；`account`：登录的账号名或 key 的尾号，绝不是完整的 key。
 
 `current` 是主模型的 `provider` 和 `model`，没选时为 `null`。
@@ -2926,6 +2928,9 @@ x-wonton:
 - **网址只给 https。** `key_url` 和登录网址都在 App 内浏览器里打开，别的 scheme 核心不转。
 - **登录会话的状态放在 Agent 的长期进程里。** 命令每次都是新进程，设备码要一直轮询服务商，不要指望命令本身留着状态。
 - **快。** `test` 最多 60 秒，其余 30 秒，超时算出错；一次输出不超过 1 MiB，一份目录最多 500 家、一家最多 5000 个模型。
+- **守长度。** 服务商 ID 和登录会话号最多 200 字符；`name`、`account`、`key_prefix`、模型的 `id` 和 `name`、`current.model`
+  最多 500 字符；一份目录里服务商 ID 不重复，一家的模型 ID 不重复。超了或重复，核心整份拒掉、按出错报。`interval` 落到 1–30 秒。
+  用户填的 key 最长 8 KiB，中间不能有空白或控制字符，不合格的核心在交给插件前就拒。
 - 有 `bots` 的插件按 `bot` 只读写那个 Bot 的配置，别的 Bot 不受影响。
 
 没模型、key 失效时 Agent 在聊天里回的那句话，指向 App 里这个 Bot 的模型设置（`wonton://bot-models/<插件 ID>/<Bot 名>`），

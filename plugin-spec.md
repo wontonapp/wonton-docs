@@ -1,4 +1,4 @@
-# 插件规范 `x-wonton`（草案 v0.16）
+# 插件规范 `x-wonton`（草案 v0.17）
 
 > 草案，字段可能调整。正式发布之前规范直接改，不保留旧写法：核心只认当前的写法，插件跟着升。
 
@@ -127,8 +127,9 @@ x-wonton:
 | `mcp` | 否 | 给 Agent 的工具入口：`service`、`port`、`path`（默认 `/mcp`）、`transport`（`streamable-http`），可选 `headers`（见“提供工具”）、`tool_idle_seconds`、`tool_total_seconds`、`tools`（只提供列出的工具），见“工具与 MCP 总线”。 |
 | `bot` | 否 | Bot 的显示名（`display_name`，多语言）、静态头像（`avatar`）和状态头像（`avatars`：`idle`、`working`、`waiting`、`offline` 四个状态各一个文件），都是插件包里的文件；聊天页的默认显示方式（`chat_layout`，见“聊天页的显示方式”）。只能和 `matrix.bot` 权限一起声明，见“Matrix Bot”。 |
 | `bots` | 否 | 一个插件多个 Bot：`services` 列出每个 Bot 一份的服务（见“一个插件多个 Bot”）。 |
-| `agent` | `kind=agent` 时必填 | `protocol`：`matrix`（Agent 自己登录 Matrix，须声明 `matrix.bot`）或 `acp`（经 ACP 桥接入）。可选 `login`，见“Agent 插件”。 |
+| `agent` | `kind=agent` 时必填 | `protocol`：`matrix`（Agent 自己登录 Matrix，须声明 `matrix.bot`）或 `acp`（经 ACP 桥接入）。可选 `login`、`models`，见“Agent 插件”。 |
 | `agent.skills.mount` | 否 | 仅 `kind: agent` 允许。容器内的绝对路径，不能是 `/`，不能含 `..` 路径段，不能是 `/proc`、`/sys`、`/dev` 或它们的子路径。填写 Agent 原生会读取、但自己不会往里写的技能目录。 |
+| `agent.models` | 否 | 仅 `kind: agent` 允许。`service`（在哪个服务里执行，写了 `bots` 的插件须在 `bots.services` 里）和 `command`（argv）。见“模型接入”。 |
 | `provides` | 否 | 向其他插件提供的能力：`models`（见“模型网关”，宜为官方插件）、`egress_proxy`（见“网络”的“代理插件”），`agent_acp`（见“Agent 插件”）以及其他能力，键是能力名，见“能力依赖”。托管能力（`static_web`、`web_storage`）还要写 `mount`，见“提供方”。 |
 | `requires`、`wants` | 否 | 依赖的能力名列表：`requires` 的能力没有提供方装不上，`wants` 有提供方就用、没有照装。提供方可以声明自己提供的同一能力；核心选提供方时排除自身。见“能力依赖”。 |
 | `gpu` | 否 | 拿到显卡的服务（`services`），以及按显卡厂商换的镜像（`images`）。要和 `devices.gpu` 权限一起声明，见“显卡”。 |
@@ -372,6 +373,10 @@ services:
 ### 各版本新增的字段
 
 清单用到下面某一版新增的字段时，`spec` 至少写那一版，`plugin check` 会逐项检查。有写法从某一版起退役：退役的权限在老 `spec` 里继续收、到那一版才报错（要改写法，不是抬 `spec`），改名、删掉的字段例外（老 `spec` 里也照样报未知字段）。
+
+**0.17**
+
+- `agent.models`：Agent 插件声明模型接入命令，用户在 App 里原生地接模型（见“Agent 插件”的“模型接入”）。使用此字段的清单至少写 `spec: "0.17"`。
 
 **0.16**
 
@@ -2813,8 +2818,8 @@ x-wonton:
 - **端到端加密。** Bot 的主房间、App 建的私聊和群默认都加密，不支持加密的 Agent 收不到用户的话。加密状态放在
   `${WONTON_BOT_DATA}` 里，容器重建后还在；首次启动建的恢复密钥用 `secrets` 的 `collect` 交给核心保管（见“插件密钥”）。
   缺加密依赖时启动失败，不要只在不加密的房间里干活。
-- **模型。** 模型由插件自己接：用户在密钥里填服务商的 key（上面的 `input`），或者在 Agent 自己的网页里设，请求经
-  `network.egress` 出去。家里装着模型网关时可以 `wants: [models]` 用它（见“模型网关”），不是必需的。没配好模型、key 不对时
+- **模型。** 模型由插件自己接，请求经 `network.egress` 出去。推荐声明 `agent.models`，让用户在 App 里原生地填 key、登录、
+  选模型（见下面的“模型接入”）；也可以让用户在密钥里填服务商的 key（上面的 `input`）。家里装着模型网关时可以 `wants: [models]` 用它（见“模型网关”），不是必需的。没配好模型、key 不对时
   在聊天里如实说，不要悄悄换别的模型。
 - **自带工具。** Agent 容器里的 shell、读写文件这类工具不经核心：它们读得到这个 Bot 数据目录里的一切，包括聊天记录、
   记忆、Matrix 令牌和模型密钥。核心只管经 MCP 总线的调用。要让用户确认自带工具的动作，用“Agent 权限确认”；
@@ -2848,6 +2853,89 @@ x-wonton:
 
 **帮助 skill。** 官方 Agent 插件要带 [`skills/wonton-help`](skills/wonton-help/SKILL.md)，放进这个 Agent 读 skill 的目录，
 如 Hermes 的 `$HERMES_HOME/skills`。不带时用户问 Wonton 的用法，Agent 不一定想得到调 `wonton__help`。
+
+### 模型接入（`agent.models`）
+
+声明了 `agent.models` 的 Agent 插件，用户在 App 里原生地接模型：列服务商、填 key、登录账号、选模型、测一下。插件只给数据，
+界面在 App 里；服务商有哪些、叫什么、先后顺序、去哪拿 key、能不能登录，全由插件按它的上游给，核心和 App 不带服务商名单。
+没声明时 App 不显示模型入口，模型照旧由插件自己接（上面的“模型”）。
+
+```yaml
+x-wonton:
+  spec: "0.17"
+  kind: agent
+  agent:
+    protocol: matrix
+    models:
+      service: agent                       # 在哪个服务里执行；写了 bots 的插件，在这个 Bot 那一组的这个服务里
+      command: [/usr/local/bin/my-agent-models]
+```
+
+核心经 `docker exec` 执行 `command`（argv，不经 shell），一次一个操作。标准输入是一行 JSON，标准输出是一行 JSON：
+
+```json
+{"op": "save_key", "provider": "openrouter", "key": "sk-or-…", "bot": "alice", "languages": ["zh-hans", "en"]}
+```
+
+每次都带 `op`、`bot`（哪个 Bot，即 `WONTON_BOT_NAME`）和 `languages`（App 的语言，从最想要的排起，BCP 47 标签一律小写；给人看的那一句按它写）。
+操作：
+
+| `op` | 输入 | 输出 |
+| --- | --- | --- |
+| `catalog` | 无 | `providers`、`current`（见下） |
+| `save_key` | `provider`、`key`，要地址的服务商另带 `base_url` | `check`：`accepted`（认了、已存）、`rejected`（拒了、没存）、`unverified`（没法提前验证、照存）；可带 `message` |
+| `disconnect` | `provider` | `{}`：填的 key 和登录都去掉 |
+| `login_start` | `provider`；`browser_login` 另带 `redirect_uri` | `session`、`url`（https）、`code`（设备码，可空）、`expires_in`、`interval`（秒） |
+| `login_poll` | `session` | `state`：`pending`、`approved`、`denied`、`expired`、`failed`；可带 `message` |
+| `login_finish` | `session`、`callback_url`（只给 `browser_login`） | 同 `login_poll` |
+| `login_cancel` | `session` | `{}` |
+| `models` | `provider` | `models`：每项 `id`、`name`（可空）、`recommended` |
+| `select` | `provider`、`model`，看过贵模型提示后另带 `confirmed: true` | `current`；要先确认时回 `confirm`（一句说明），这次不保存 |
+| `test` | 无 | `result`：`ok`、`rejected`（凭据不认）、`unreachable`（连不上服务商）、`upstream`（服务商出错）、`no_model`（还没选）；可带 `message`、`latency_ms` |
+
+`catalog` 的 `providers` 按插件想要的顺序排，每项：
+
+- `id`、`name`；`recommended: true` 的排在前面，其余收进“更多”；
+- `auth`：能怎么接，一种或几种：
+  - `{"type": "api_key", "key_url": "https://…", "key_prefix": "sk-or-", "base_url": {"required": true, "default": "…"}}`：
+    `key_url` 是去哪拿 key（只收 https，可省），`key_prefix` 是 key 的固定开头（App 据此认出剪贴板里刚复制的 key，可省），
+    `base_url` 只给要填地址的服务商（如自定义的 OpenAI 兼容服务）；
+  - `{"type": "device_login"}`：设备码登录，App 打开 `login_start` 给的网址、显示码，按 `interval` 轮询到 `approved`；
+  - `{"type": "browser_login"}`：浏览器授权后回跳 App（`redirect_uri` 是 `wonton://model-login`），App 把回跳的完整网址交给
+    `login_finish`，插件换凭据。服务商不接受这种回跳地址时不要声明它。授权网址必须带一个每次登录新生成、猜不到的 `state`
+    （OAuth 的做法）：App 只把 `state` 一致的回跳交回来，插件在 `login_finish` 里还要自己再比一次，对不上、会话已经用过或过期
+    都回 `failed`，不换凭据；一个会话只能 `login_finish` 成功一次；
+  以后可能加别的 `type`：App 跳过不认识的那一种，一家的接法全都不认识时才不列这家，整份目录照常用；
+- `connected`：填了 key 或登录了（不代表 key 有效）；`account`：登录的账号名或 key 的尾号，绝不是完整的 key。
+
+`current` 是主模型的 `provider` 和 `model`，没选时为 `null`。
+
+退出码：
+
+| 退出码 | 意思 | 标准输出 |
+| --- | --- | --- |
+| `0` | 操作做完了。服务商拒了 key、登录被拒或过期、测试不通都是 `0`，结果在字段里 | 上表的输出 |
+| `2` | 输入不合法 | `{"field": "base_url", "message": "…"}`，`field` 说不清时为 `null` |
+| `3` | 不认识这个服务商或登录会话（会话过期也算） | 任意 |
+| `4` | Agent 自己还没起来，接口不通 | 任意 |
+| 其他 | 出错了 | 任意；标准错误写原因，核心截短后如实报给用户 |
+
+要求：
+
+- **key 只进这个 Bot 自己的数据。** 存进 Agent 原生保存凭据的地方，核心不留副本。输出、标准错误和日志里都不要出现 key，
+  核心也会把这次提交的 key 原文替换掉再记录。
+- **不要伪装成功。** `save_key` 没真验证就回 `unverified`；`test` 要真发一条很短的请求，看到回复才回 `ok`，不把上游的报错原文
+  当成功。测试可能计费，App 会写明。
+- **网址只给 https。** `key_url` 和登录网址都在 App 内浏览器里打开，别的 scheme 核心不转。
+- **登录会话的状态放在 Agent 的长期进程里。** 命令每次都是新进程，设备码要一直轮询服务商，不要指望命令本身留着状态。
+- **快。** `test` 最多 60 秒，其余 30 秒，超时算出错；一次输出不超过 1 MiB，一份目录最多 500 家、一家最多 5000 个模型。
+- **守长度。** 服务商 ID 和登录会话号最多 200 字符；`name`、`account`、`key_prefix`、模型的 `id` 和 `name`、`current.model`
+  最多 500 字符；一份目录里服务商 ID 不重复，一家的模型 ID 不重复。超了或重复，核心整份拒掉、按出错报。`interval` 落到 1–30 秒。
+  用户填的 key 最长 8 KiB，中间不能有空白或控制字符，不合格的核心在交给插件前就拒。
+- 有 `bots` 的插件按 `bot` 只读写那个 Bot 的配置，别的 Bot 不受影响。
+
+没模型、key 失效时 Agent 在聊天里回的那句话，指向 App 里这个 Bot 的模型设置（`wonton://bot-models/<插件 ID>/<Bot 名>`），
+不要指向插件网页。
 
 ### 报轮次、取消和出箱
 

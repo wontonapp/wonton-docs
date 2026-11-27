@@ -2872,10 +2872,10 @@ x-wonton:
 核心经 `docker exec` 执行 `command`（argv，不经 shell），一次一个操作。标准输入是一行 JSON，标准输出是一行 JSON：
 
 ```json
-{"op": "save_key", "provider": "openrouter", "key": "sk-or-…", "bot": "alice", "languages": ["zh-Hans", "en"]}
+{"op": "save_key", "provider": "openrouter", "key": "sk-or-…", "bot": "alice", "languages": ["zh-hans", "en"]}
 ```
 
-每次都带 `op`、`bot`（哪个 Bot，即 `WONTON_BOT_NAME`）和 `languages`（App 的语言，从最想要的排起；给人看的那一句按它写）。
+每次都带 `op`、`bot`（哪个 Bot，即 `WONTON_BOT_NAME`）和 `languages`（App 的语言，从最想要的排起，BCP 47 标签一律小写；给人看的那一句按它写）。
 操作：
 
 | `op` | 输入 | 输出 |

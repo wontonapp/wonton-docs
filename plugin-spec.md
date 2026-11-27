@@ -2900,7 +2900,9 @@ x-wonton:
     `base_url` 只给要填地址的服务商（如自定义的 OpenAI 兼容服务）；
   - `{"type": "device_login"}`：设备码登录，App 打开 `login_start` 给的网址、显示码，按 `interval` 轮询到 `approved`；
   - `{"type": "browser_login"}`：浏览器授权后回跳 App（`redirect_uri` 是 `wonton://model-login`），App 把回跳的完整网址交给
-    `login_finish`，插件换凭据。服务商不接受这种回跳地址时不要声明它；
+    `login_finish`，插件换凭据。服务商不接受这种回跳地址时不要声明它。授权网址必须带一个每次登录新生成、猜不到的 `state`
+    （OAuth 的做法）：App 只把 `state` 一致的回跳交回来，插件在 `login_finish` 里还要自己再比一次，对不上、会话已经用过或过期
+    都回 `failed`，不换凭据；一个会话只能 `login_finish` 成功一次；
 - `connected`：填了 key 或登录了（不代表 key 有效）；`account`：登录的账号名或 key 的尾号，绝不是完整的 key。
 
 `current` 是主模型的 `provider` 和 `model`，没选时为 `null`。

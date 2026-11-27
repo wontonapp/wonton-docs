@@ -1148,7 +1148,7 @@ App 在文档开始前把下面的 CSS 变量写到根元素，同时设置 `col
 | `--color-text-danger`、`--color-text-success`、`--color-text-warning`，`background`、`border`、`ring` 同理 | 状态色 |
 | `--font-sans` | 系统字体 |
 | `--border-radius-xs`、`--border-radius-md`、`--border-radius-lg`、`--border-radius-full` | 圆角 |
-| `--wonton-accent-fill`、`--wonton-accent-ink`、`--wonton-accent-ink-on-fill` | 强调色：按钮这类强调的底色、页面上要强调的文字和图标、放在强调底色上的文字。App 的界面是黑白的：浅色时前两个是黑、第三个是白，深色时反过来，所以强调底色上的字要用 `ink-on-fill`，不能用 `ink` |
+| `--wonton-accent-fill`、`--wonton-accent-ink`、`--wonton-accent-ink-on-fill` | 强调色：按钮这类强调的底色、页面上要强调的文字和图标、放在强调底色上的文字。App 的界面是黑白灰的：浅色时底色是黑、强调文字是黑、底色上的字是白；深色时底色是深灰、强调文字和底色上的字都是白。浅色下 `ink` 和 `fill` 同色，所以强调底色上的字要用 `ink-on-fill`，不能用 `ink` |
 | `--wonton-inset-top`、`--wonton-inset-bottom` | 页面顶上、底下要自己让出的高度，见“整页显示”；App 已经替页面让开的边是 0 |
 | `--wonton-inset-left`、`--wonton-inset-right` | 左右安全区，横屏时躲刘海和圆角 |
 

@@ -1,4 +1,4 @@
-# 插件规范 `x-wonton`（草案 v0.16）
+# 插件规范 `x-wonton`（草案 v0.17）
 
 > 草案，字段可能调整。正式发布之前规范直接改，不保留旧写法：核心只认当前的写法，插件跟着升。
 
@@ -372,6 +372,10 @@ services:
 ### 各版本新增的字段
 
 清单用到下面某一版新增的字段时，`spec` 至少写那一版，`plugin check` 会逐项检查。有写法从某一版起退役：退役的权限在老 `spec` 里继续收、到那一版才报错（要改写法，不是抬 `spec`），改名、删掉的字段例外（老 `spec` 里也照样报未知字段）。
+
+**0.17**
+
+- `provides.media_source.browse`：客户端还能直接按哪个标准浏览媒体库，点开插件进 App 的原生界面（见“媒体源：清单声明”）。
 
 **0.16**
 
@@ -1830,6 +1834,7 @@ x-wonton:
 - `operations` 自报能做的操作：`upload`（开始上传、查偏移、续传、收尾、放弃）、`download`（带 `Range` 取字节）、`playback`（取播放计划、报进度、报停止）、`list`（分页列条目，给 Agent 找内容）。不能为空；核心仍以运行时的 `GET /_wonton/capabilities` 为准，这里给安装预检。
 - `kinds` 自报内容种类：`photo`、`video`、`audio`。不能为空；其他种类也能写，核心不认识的值原样保留。
 - `credentials` 的写法和执行方式同“提供方”一节的凭据命令，`issue`、`revoke` 两项都必填；命令默认在 `service` 的容器里执行，要换服务就写 `credentials.service`，它也必须在本插件的 `services` 里。
+- `browse` 可选，声明 App 还能直接按哪个标准浏览库：`opensubsonic`（OpenSubsonic，网页同源的 `/rest/*`）。写了它，家人点开插件进 App 的原生界面（音乐库、专辑、歌手、歌单、搜索），网页留在胶囊菜单的“更多”里；App 不认识的取值当没写，照旧打开网页。App 经插件网页的代理去讲这个标准，不拿上游账号密码，所以插件要有 `webui` 且 `sso: proxy`，上游按网关代加的身份头认人（见“网关代登录”）。`browse` 只能写在 `media_source` 上，清单至少写 `spec: "0.17"`。
 - `operations` 或 `kinds` 为空、`service` 写成 compose 里没有的名字、`spec` 低于 `"0.16"`，都算清单不合法。
 
 ### 媒体源：路径

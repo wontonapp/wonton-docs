@@ -979,6 +979,7 @@ x-wonton:
 - `http.service` 要和 `http.port` 配成网页服务（见“网络”），TCP 入口不发布端口，全部经家里的服务器转给插件。
 - `http.port` 不能是 `mcp` 的端口，可以是 `webui` 的端口（有的应用网页和 API 同一个端口）。`tcp` 的端口不能是 `webui` 或
   `mcp` 的端口：经网关加的请求头在 TCP 上伪造得了。
+- `http.service`、`credentials.service`、`tcp[].service` 都要在 compose 里，也不能是 Bot 服务：每个 Bot 一组容器，入口和密码命令认不出该转给哪个。
 - 插件按 `X-Forwarded-Host` 知道请求的地址。要固定地址的应用（往外登记回调、只认一个 `Host`）用变量
   `WONTON_EXTERNAL_URL` 和 `http.single_host`，见下文。
 
@@ -1023,7 +1024,7 @@ auth:
 | `revoke` | 吊销。`per_client: true` 时必填。 |
 | `rotate` | 换值。`per_client: false` 时必填，也不能写 `revoke`。 |
 | `ends_sessions` | 必填，不设默认值：吊销和换值结不结束应用里已有的登录。写 `false` 的，同时在 `about` 里说明。 |
-| `service` | 跑命令的服务，默认 `http.service`。 |
+| `service` | 跑命令的服务，默认 `http.service`；要在 compose 里，不能是 Bot 服务。 |
 | `username` | 显示给用户填的用户名，默认 `{user}`。 |
 | `per_client` | 默认 `true`：每个客户端一个密码。应用里每个用户只能有一个密码时写 `false`，整个插件一个。 |
 | `generates` | 默认 `false`。为 `true` 时值由应用生成：`issue` 不读标准输入，把值写到标准输出的第一行（上限 4 KiB），其余不解析；这时必须写 `verify`。 |

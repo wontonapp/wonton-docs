@@ -2923,6 +2923,21 @@ App 看最新的编辑。
 - `waiting` 时可以带 `choices`（`[{"key": "…", "label": "…"}]`）：用户点了，以用户的身份对这条消息发 `m.annotation` 反应，
   键是选项的 `key`。它答的是 Agent 自己的问题，不是 Wonton 的确认。
 - 答案照常另发一条消息。`body` 写成一句人话，不认识这个格式的客户端看到的就是它。App 只对核心认得的 Bot 账号解读状态。
+- 这一轮调过的工具可以列在状态对象旁边的 `app.wonton.trace` 里（不放进 `org.fluxchat.agent`），每次编辑带全量清单，
+  App 默认收起，点开“N 步”才显示：
+
+  ```json
+  "app.wonton.trace":{"v":1,"calls":[
+    {"id":"call_1","kind":"read","title":"read_file: notes.md","status":"completed"},
+    {"id":"call_2","kind":"execute","title":"terminal: ls -la","status":"in_progress"}]}
+  ```
+
+  `kind` 用 ACP 的 `ToolKind`（`read`、`edit`、`delete`、`move`、`search`、`execute`、`think`、`fetch`、`other`），`status` 用 ACP 的
+  `ToolCallStatus`（`in_progress`、`completed`、`failed`）。最多 30 项、`title` 最长 120 个字符，`steps` 写这一轮的总数。
+  一轮结束或 Bot 离线时还是 `in_progress` 的项，App 显示成结果不确定。`v` 不是 `1`、`calls` 不是数组时 App 当没有清单，
+  缺字段的项跳过，不认识的取值落到其他。
+- `title` 房间里的人都看得到，不要放工具的结果、文件内容和完整参数：多人房间只写类别（“读文件”“执行命令”），
+  私聊可以写一行脱敏过的命令、路径或查询。
 
 **附件分组。** App 一次发几张照片或几个文件时，每条事件内容的顶层带同一个标记：
 

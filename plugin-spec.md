@@ -1,4 +1,4 @@
-# 插件规范 `x-wonton`（草案 v0.16）
+# 插件规范 `x-wonton`（草案 v0.17）
 
 > 草案，字段可能调整。正式发布之前规范直接改，不保留旧写法：核心只认当前的写法，插件跟着升。
 
@@ -27,11 +27,12 @@ services:
       test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/healthz"]
 
 x-wonton:
-  spec: "0.13"
+  spec: "0.17"
   id: app.immich.photos
   version: 2.0.0
   kind: app
   title: { en: Immich }
+  subtitle: { zh: 手机相册备份, en: Phone Photo Backup }
   description: { zh: 备份手机里的照片和视频，按人脸和内容搜索, en: "Back up your photos and videos, search by face and content" }
   icon: icon.png
   screenshots: [screenshots/timeline.png, screenshots/search.png]
@@ -115,6 +116,7 @@ x-wonton:
 | `kind` | 是 | `app`（普通应用）、`agent`（Agent 运行时）、`channel`（第三方 IM 渠道）、`model`（模型服务）、`system`（系统插件，只给官方插件；核心默认不带，从商店装）。 |
 | `runtime` | 否 | 运行形态：`compose`、`remote_mcp`、`skills`、`static_web` 或 `link`，省略时为 `compose`。`compose` 必须有非空的顶层 `services`；其他运行形态不允许出现 `services`，即使为空也不行。与 `kind` 独立。`static_web`、`link` 见“静态网页和外部网页”，`remote_mcp` 见“远端 MCP”。 |
 | `title`、`description` | 是 | 多语言文本，至少写一种语言。怎么写见“标题和说明怎么写”。 |
+| `subtitle` | 否 | 标题下面的一句用途，多语言，见“商店信息”。 |
 | `icon` | 否 | 插件包里的 PNG 或 SVG，见“商店信息”。官方索引要求必填。 |
 | `screenshots`、`author`、`homepage`、`license`、`license_url`、`tags`、`about`、`release_notes`、`setup` | 否 | 商店信息，见“商店信息”。官方索引要求有 `tags`、`author` 和 `license`。 |
 | `notices` | 否 | 插件包里的许可和声明文件（UTF-8 文本）的路径列表，见“插件包”。官方索引要求必填。 |
@@ -302,6 +304,7 @@ services:
 | 字段 | 说明 |
 | --- | --- |
 | `spec` | 必填。清单按哪一版规范写成，字符串，如 `"0.8"`（YAML 里要加引号，不然读成数字）。没写时安装失败。核心先读它：比核心支持的版本新时安装失败（`unsupported`），提示先升级核心，不再逐项报未知字段。用到“各版本新增的字段”里某一版的字段时，至少写那一版，旧核心才会如实提示升级。 |
+| `subtitle` | 副标题：标题下面的一句用途，如 `{ zh: 电影下载, en: Movie Downloads }`。多语言，每种语言不超过 30 个字符。App 在列表行和详情页的标题下面显示它，地方不够时只显示标题。怎么写见“标题和说明怎么写”。 |
 | `icon` | 图标，见下节。 |
 | `screenshots` | 截图：仓库里的 PNG 或 JPEG（路径规则同插件包里的文件），1 到 6 张，按顺序显示。截图不算插件包的一部分：不参与插件包摘要，安装时不取，上传插件包时忽略；商店的详情页要显示时，核心按同一个提交去取。 |
 | `author` | 插件包的作者：`name`（必填）、`url`（HTTPS，可选）。不一定是应用的作者。 |
@@ -340,13 +343,18 @@ services:
 
 ### 标题和说明怎么写
 
-商店里的标题和说明是给不懂技术的家人看的，验收只有一条：只看标题和第一句，能说出这是干什么的。
+商店里的标题、副标题和说明是给不懂技术的家人看的，验收只有一条：只看副标题和说明的第一句，能说出这是干什么的。
 
 **标题**
 
-- `title` 写产品原名（Immich、Syncthing 这种），不要翻译成用途，用途交给 `tags`；原名不译时只写 `en`，如 `title: { en: Immich }`。
-- 原名看不出是干什么的（如 Copyparty），中文给通俗名、原名放括号：`家庭网盘（Copyparty）`；英文同理：`Home Cloud Drive (Copyparty)`。
+- `title` 写产品原名（Radarr、Immich、Syncthing），不翻译成用途，也不在后面加括号；原名不译时只写 `en`，如 `title: { en: Radarr }`。上游有官方中文名的（如思源笔记），`zh` 写中文名。
 - 插件自己就是产品、没有上游时才用功能名，`zh` 和 `en` 都写。
+
+**副标题（`subtitle`）**
+
+- 几个字说清它是干什么的，用日常说法：`电影下载`、`家庭音乐库`、`手机相册备份`；英文同理：`Movie Downloads`。
+- 原名看不出用途（如 Copyparty）时，用途全靠它：`家庭网盘`。
+- 不写术语（见下面“不写术语”），不重复原名，不加句号。
 
 **说明（`description`）**
 
@@ -361,17 +369,21 @@ services:
 
 **语言**
 
-- 标题和说明每种语言都写，至少 `zh` 和 `en`；清单里其他地方写了 `zh-Hant`、`ja` 的也补上，繁中用台湾用词。`about` 的第一段照这些要求写，其余段落不受这条限制。
+- 副标题和说明每种语言都写，至少 `zh` 和 `en`；清单里其他地方写了 `zh-Hant`、`ja` 的也补上，繁中用台湾用词。`about` 的第一段照这些要求写，其余段落不受这条限制。
 
 例子：
 
-- Copyparty：标题 `家庭网盘（Copyparty）`，说明 `像百度网盘，在手机和电脑上存取、分享家里的文件。设备之间自动同步用 Syncthing 更合适。`
-- Immich：标题 `Immich`，说明 `像 Google 相册，备份手机里的照片和视频，按人脸和内容搜索。`
-- qBittorrent：照抄上游简介家人看不懂——`BitTorrent 客户端，支持 RSS 订阅、顺序下载和 WebUI 远程管理`；改成标题 `下载工具（qBittorrent）`，说明 `像迅雷，把网上的资源下载到家里，网页上就能加链接、看进度。`
+- Copyparty：标题 `Copyparty`，副标题 `家庭网盘`，说明 `像百度网盘，在手机和电脑上存取、分享家里的文件。设备之间自动同步用 Syncthing 更合适。`
+- Immich：标题 `Immich`，副标题 `手机相册备份`，说明 `像 Google 相册，备份手机里的照片和视频，按人脸和内容搜索。`
+- qBittorrent：照抄上游简介家人看不懂——`BitTorrent 客户端，支持 RSS 订阅、顺序下载和 WebUI 远程管理`；改成标题 `qBittorrent`、副标题 `BT 下载`，说明 `像迅雷，把网上的资源下载到家里，网页上就能加链接、看进度。`
 
 ### 各版本新增的字段
 
 清单用到下面某一版新增的字段时，`spec` 至少写那一版，`plugin check` 会逐项检查。有写法从某一版起退役：退役的权限在老 `spec` 里继续收、到那一版才报错（要改写法，不是抬 `spec`），改名、删掉的字段例外（老 `spec` 里也照样报未知字段）。
+
+**0.17**
+
+- `x-wonton.subtitle`：标题下面的一句用途（见“商店信息”）。写了它的清单至少写 `spec: "0.17"`。
 
 **0.16**
 
@@ -1353,12 +1365,13 @@ x-wonton:
 
 ```yaml
 x-wonton:
-  spec: "0.15"
+  spec: "0.17"
   id: io.github.alice.notion
   version: 1.0.0
   kind: app
   runtime: remote_mcp
-  title: { zh: 笔记（Notion）, en: Notes (Notion) }
+  title: { en: Notion }
+  subtitle: { zh: 笔记, en: Notes }
   description: { zh: 让 Agent 读写你的 Notion 页面, en: Let agents read and write your Notion pages }
   permissions: []
   remote_mcp:

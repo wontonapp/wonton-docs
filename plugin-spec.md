@@ -642,8 +642,7 @@ Minimal app icon, flat vector. Solid plain light grey background #F4F4F4 filling
 - App 用专门的 `TabRef::Bot { bot: BotRef, path: Option<String> }` 标识 Bot 页面，不存 URL，不降成
   `TabRef::Plugin` 或 `TabRef::Url`。`path: None` 打开同一个 `BotRef` 的 `BotView.web` 在 `Ready` 时给出的
   `page.url`；`Some(path)` 只允许该 origin 内的路径，可含查询和片段，不能换 origin。
-  打开／选择沿用 `Action::SelectTab`，固定沿用 `PinTab`、`PinCurrentPage` 和 `Panel`，`PlacedTab` 保留同一个
-  Bot 身份和路径。桥、媒体与 `--wonton-*` 也沿用既有 `TabRef`／`PlacedTab` 接口和页面容器，不另造壳层 WebView
+  打开／选择沿用 `Action::SelectTab`，`PlacedTab` 保留同一个 Bot 身份和路径。桥、媒体与 `--wonton-*` 也沿用既有 `TabRef`／`PlacedTab` 接口和页面容器，不另造壳层 WebView
   或因是 Bot 页面而省略桥。
   实现时把聊天已有的 `BotView` watch 通道接入 `TabsLink`，网页状态变化时重算 `TabsViewModel` 的 `TabPage`；
   URL 只来自精确匹配该 `BotRef` 的 `BotView.web.Ready.page.url`，桥的来源校验以该 `TabPage.url` 为准。
@@ -1345,7 +1344,7 @@ x-wonton:
 - `url` 只收 `https`，不能带用户名和密码。核心只存地址，不代理、不做单点登录。
 - 清单只能有商店信息和 `link`：`permissions` 写空列表，不能写 `requires`、`wants` 和上一节列出的服务端字段。
 - App 用系统自带的 App 内浏览器打开，顶上显示网址；页面和 App 之间没有任何通道（不能发消息、调工具）。用户可以把它
-  钉进侧边栏或面板。
+  钉进侧边栏。
 
 ### 远端 MCP（`runtime: remote_mcp`）
 
